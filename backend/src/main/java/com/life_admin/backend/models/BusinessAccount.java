@@ -1,5 +1,6 @@
 package com.life_admin.backend.models;
 
+import jakarta.validation.constraints.Email;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -10,9 +11,16 @@ import java.util.List;
 @NoArgsConstructor
 @RequiredArgsConstructor
 @Document("businesses")
-public class Business {
+public class BusinessAccount {
 	@Id
 	private String id;
+	
+	@NonNull
+	@Email
+	private String email;
+	
+	@NonNull
+	private String password;
 	
 	@NonNull
 	private String name;
