@@ -1,16 +1,14 @@
 package com.life_admin.backend.models;
 
 import jakarta.validation.constraints.Email;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
+@RequiredArgsConstructor
 @Document("users")
 public class UserAccount {
 	@Id
@@ -18,10 +16,13 @@ public class UserAccount {
 	
 	@Email
 	@Indexed(unique = true)
+	@NonNull
 	private String email;
 	
+	@NonNull
 	@Indexed(unique = true)
 	private String username;
 	
+	@NonNull
 	private String password;
 }

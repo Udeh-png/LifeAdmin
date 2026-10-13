@@ -1,6 +1,7 @@
 package com.life_admin.backend.controllers;
 
 import com.life_admin.backend.DTOs.request.LoginRequest;
+import com.life_admin.backend.DTOs.request.RegistrationRequest;
 import com.life_admin.backend.DTOs.response.LogInResponse;
 import com.life_admin.backend.enums.TokenRole;
 import com.life_admin.backend.exceptions.TokenNotFoundException;
@@ -28,16 +29,10 @@ public class AuthController {
 	
 	@Autowired
 	AuthService authService;
-	@Autowired
-	UserRepository userRepository;
 	
 	@PostMapping("/register")
-	ResponseEntity<?> register(@RequestBody Map<String, String> registerRequest) {
-		String email = registerRequest.get("email");
-		String password = registerRequest.get("password");
-		
-		userRepository.save((new UserAccount(null, email, "Chisom", password)));
-		
+	ResponseEntity<?> register(@RequestBody RegistrationRequest regRequest) {
+		authService.register(regRequest);
 		return ResponseEntity.ok("created");
 	}
 	

@@ -1,6 +1,7 @@
 package com.life_admin.backend.services;
 
 import com.life_admin.backend.DTOs.request.LoginRequest;
+import com.life_admin.backend.DTOs.request.RegistrationRequest;
 import com.life_admin.backend.enums.TokenRole;
 import com.life_admin.backend.exceptions.InvalidTokenTypeException;
 import com.life_admin.backend.models.BusinessAccount;
@@ -17,6 +18,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 @Service()
 public class AuthService {
 	
@@ -30,9 +33,16 @@ public class AuthService {
 	AuthenticationManager authManager;
 	@Autowired
 	UserRepository userRepo;
-	
 	@Autowired
 	BusinessAccountRepo businessRepo;
+	
+	public void register (RegistrationRequest regReq) {
+		String email = regReq.getEmail();
+		String username = regReq.getUsername();
+		String password = regReq.getPassword();
+		
+		userRepo.save((new UserAccount(email, username, password)));
+	}
 	
 	public String refreshAccessToken(String refreshToken) {
 		String userEmail = jwtService.extractClaim(refreshToken, Claims::getSubject);
