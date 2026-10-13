@@ -16,8 +16,8 @@ public class UserAccount {
 	@Id
 	private String id;
 	
-	@Indexed(unique = true)
 	@Email
+	@Indexed(unique = true)
 	private String email;
 	
 	@Indexed(unique = true)
