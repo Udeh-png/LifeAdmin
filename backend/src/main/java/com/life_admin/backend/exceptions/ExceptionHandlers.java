@@ -34,6 +34,11 @@ public class ExceptionHandlers {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", tnf.getMessage()));
 	}
 	
+	@ExceptionHandler(BusinessNotFoundException.class)
+	public ResponseEntity<?> businessFoundExceptionHandler (BusinessNotFoundException bnf) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "No business found"));
+	}
+	
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<?> catchAllHandler (Exception ex) {
 		log.error("An unhandled Exception occurred: {}", ex.getMessage(), ex);
