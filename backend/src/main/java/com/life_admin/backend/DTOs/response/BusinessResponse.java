@@ -17,11 +17,9 @@ public class BusinessResponse {
 	private String email;
 	private String category;
 	private List<BusinessAccount.Service> services;
-	private List<Instant> availableSlots;
 	
 	public BusinessResponse (BusinessAccount b) {
 		this.email = b.getEmail();
-		this.availableSlots = b.getAvailableSlots();
 		this.id = b.getId();
 		this.name = b.getName();
 		this.category = b.getCategory();

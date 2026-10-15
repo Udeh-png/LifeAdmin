@@ -3,6 +3,7 @@ package com.life_admin.backend.services;
 import com.life_admin.backend.DTOs.response.BusinessResponse;
 
 import com.life_admin.backend.exceptions.BusinessNotFoundException;
+import com.life_admin.backend.exceptions.ServiceNotFoundException;
 import com.life_admin.backend.models.BusinessAccount;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,8 +12,10 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class BusinessService {
@@ -63,5 +66,19 @@ public class BusinessService {
 	public BusinessResponse findWithId(String id) {
 		BusinessAccount account = businessRepo.findById(id).orElseThrow(BusinessNotFoundException::new);
 		return new BusinessResponse(account);
+	}
+	
+	public List<Instant> getAvailableSlots(String id, String serviceId) {
+		BusinessAccount businessAccount = businessRepo.findById(id).orElseThrow();
+		
+		BusinessAccount.Service service = businessAccount.getServices()
+				.stream()
+				.filter(s -> s.getId().equals(serviceId))
+				.findFirst()
+				.orElseThrow(ServiceNotFoundException::new);
+		
+		
+		
+		return service.getAvailableSlots();
 	}
 }

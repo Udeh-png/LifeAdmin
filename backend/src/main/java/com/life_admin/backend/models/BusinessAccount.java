@@ -28,15 +28,18 @@ public class BusinessAccount {
 	private String location;
 	@NonNull
 	private List<Service> services;
-	@NonNull
-	private List<Instant> availableSlots;
+	
+	private String bookingApiUrl;
 	
 	@Data
 	@RequiredArgsConstructor
 	@NoArgsConstructor
 	public static class Service {
+		@Id
+		private String id;
 		@NonNull
 		private String name;
-		private String bookingApiUrl;
+		private Long duration;
+		private List<Instant> availableSlots;
 	}
 }

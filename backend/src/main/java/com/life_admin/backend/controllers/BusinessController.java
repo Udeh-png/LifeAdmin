@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -30,12 +31,21 @@ public class BusinessController {
 		return ResponseEntity.ok(Map.of("businesses", businesses));
 	}
 	
-	@GetMapping("{id}")
+	@GetMapping("/{id}")
 	ResponseEntity<?> findWithId(@PathVariable String id) {
 		BusinessResponse business = businessService.findWithId(id);
 		return ResponseEntity.ok(business);
 	}
 	
+	@GetMapping("/{1d}/available-slots")
+	ResponseEntity<?> getAvailableSlots (
+			@PathVariable String businessId,
+			@RequestParam(required = false) String servicesId
+	) {
+		List<Instant> serviceList = businessService.getAvailableSlots(businessId, servicesId);
+		
+		return ResponseEntity.ok().build();
+	}
 	
 	@GetMapping
 	ResponseEntity<?> listAll() {
