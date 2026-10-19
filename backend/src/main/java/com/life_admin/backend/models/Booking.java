@@ -12,7 +12,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @RequiredArgsConstructor
-@Document("businesses")
+@Document("bookings")
 public class Booking {
 	@Id
 	private String id;
@@ -28,13 +28,17 @@ public class Booking {
 	private String businessName;
 	
 	@NonNull
-	private String service;
+	private String serviceName;
+	@NonNull
+	private String serviceId;
 	@NonNull
 	private Instant appointmentStartTime;
 	@NonNull
 	private Instant appointmentEndTime;
 	@NonNull
 	private BookingStatus status;
+	@NonNull
+	private Instant createdAt;
 	
 	private UserInfo userInfo;
 	

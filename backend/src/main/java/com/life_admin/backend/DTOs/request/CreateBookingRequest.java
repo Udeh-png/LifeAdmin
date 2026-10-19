@@ -11,8 +11,7 @@ import java.time.Instant;
 @NoArgsConstructor
 public class CreateBookingRequest {
 	private String businessId;
-	private String businessName;
-	private String service;
+	private String serviceId;
 	private Instant appointmentStartTime;
 	private Instant appointmentEndTime;
 }

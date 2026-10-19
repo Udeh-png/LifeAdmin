@@ -5,6 +5,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -32,14 +33,12 @@ public class BusinessAccount {
 	private String bookingApiUrl;
 	
 	@Data
-	@RequiredArgsConstructor
+	@AllArgsConstructor
 	@NoArgsConstructor
 	public static class Service {
-		@Id
 		private String id;
-		@NonNull
 		private String name;
-		private Long duration;
+		private Duration limit;
 		private List<Instant> availableSlots;
 	}
 }

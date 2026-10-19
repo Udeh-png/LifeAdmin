@@ -37,7 +37,7 @@ public class BusinessController {
 		return ResponseEntity.ok(business);
 	}
 	
-	@GetMapping("/{1d}/available-slots")
+	@GetMapping("/{id}/available-slots")
 	ResponseEntity<?> getAvailableSlots (
 			@PathVariable String businessId,
 			@RequestParam(required = false) String servicesId
