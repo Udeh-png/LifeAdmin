@@ -25,4 +25,6 @@ public class UserAccount {
 	
 	@NonNull
 	private String password;
+	
+	private String phoneNumber;
 }

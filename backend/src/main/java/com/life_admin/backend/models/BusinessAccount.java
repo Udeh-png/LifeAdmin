@@ -5,6 +5,8 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -14,29 +16,29 @@ import java.util.List;
 public class BusinessAccount {
 	@Id
 	private String id;
-	
 	@NonNull
 	@Email
 	private String email;
-	
 	@NonNull
 	private String password;
-	
 	@NonNull
 	private String name;
-	
+	@NonNull
+	private String category;
+	@NonNull
+	private String location;
 	@NonNull
 	private List<Service> services;
 	
-	@NonNull
-	private String availableSlots;
+	private String bookingApiUrl;
 	
 	@Data
-	@RequiredArgsConstructor
+	@AllArgsConstructor
 	@NoArgsConstructor
 	public static class Service {
-		@NonNull
+		private String id;
 		private String name;
-		private String bookingApiUrl;
+		private Duration limit;
+		private List<Instant> availableSlots;
 	}
 }

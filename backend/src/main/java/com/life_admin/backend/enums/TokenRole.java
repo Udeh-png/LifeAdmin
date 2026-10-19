@@ -4,7 +4,7 @@ import lombok.Getter;
 
 @Getter
 public enum TokenRole {
-	ACCESS_TOKEN("ACCESS", 900),
+	ACCESS_TOKEN("ACCESS", 1800),
 	REFRESH_TOKEN("REFRESH", 24 * 60 * 60 * 7);
 	
 	private final String name;

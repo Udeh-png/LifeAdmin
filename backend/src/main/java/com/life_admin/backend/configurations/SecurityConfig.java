@@ -1,5 +1,6 @@
 package com.life_admin.backend.configurations;
 
+import com.life_admin.backend.security.JwtFilter;
 import com.life_admin.backend.security.MyUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -22,13 +24,17 @@ public class SecurityConfig {
 	
 	@Autowired
 	private MyUserDetailsService userDetailsService;
+	@Autowired
+	private JwtFilter jwtFilter;
 	
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity security) {
 		
 		return security.csrf(CsrfConfigurer::disable)
 				.authorizeHttpRequests(
-						a -> a.anyRequest().permitAll()
+						a -> a
+								.requestMatchers("/api/v1/auth/**", "/token/**", "/businesses/**").permitAll()
+								.anyRequest().authenticated()
 				)
 				.sessionManagement(
 						s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -36,7 +42,7 @@ public class SecurityConfig {
 				.exceptionHandling(
 						e -> e.authenticationEntryPoint((q, r, x) -> r.sendError(401))
 								.accessDeniedHandler((q, r, x) -> r.sendError(403))
-				)
+				).addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 				.build();
 	}
 	
