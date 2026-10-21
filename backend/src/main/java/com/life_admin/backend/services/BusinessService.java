@@ -69,7 +69,7 @@ public class BusinessService {
 	}
 	
 	public List<Instant> getAvailableSlots(String id, String serviceId) {
-		BusinessAccount businessAccount = businessRepo.findById(id).orElseThrow();
+		BusinessAccount businessAccount = businessRepo.findById(id).orElseThrow(BusinessNotFoundException::new);
 		
 		BusinessAccount.Service service = businessAccount.getServices()
 				.stream()

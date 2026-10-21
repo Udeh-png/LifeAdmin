@@ -47,7 +47,7 @@ public class JwtFilter extends OncePerRequestFilter {
 			}
 			
 			if (token != null && jwtService.getTokenType(token).equals(TokenRole.REFRESH_TOKEN.getName()))
-				throw new InvalidTokenTypeException();
+				throw new InvalidTokenTypeException("You sent a refresh token instead of an access token");
 			
 			if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 				UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);

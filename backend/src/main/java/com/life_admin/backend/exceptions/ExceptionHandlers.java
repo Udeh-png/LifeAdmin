@@ -25,22 +25,57 @@ public class ExceptionHandlers {
 	}
 	
 	@ExceptionHandler(AuthenticationException.class)
-	public ResponseEntity<?> authenticationExceptionHandler (AuthenticationException ax) {
+	public ResponseEntity<?> authenticationExceptionHandler(AuthenticationException ax) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Bad credentials"));
 	}
 	
 	@ExceptionHandler(TokenNotFoundException.class)
-	public ResponseEntity<?> tokenNotFoundExceptionHandler (TokenNotFoundException tnf) {
+	public ResponseEntity<?> tokenNotFoundExceptionHandler(TokenNotFoundException tnf) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", tnf.getMessage()));
 	}
 	
 	@ExceptionHandler(BusinessNotFoundException.class)
-	public ResponseEntity<?> businessFoundExceptionHandler (BusinessNotFoundException bnf) {
+	public ResponseEntity<?> businessFoundExceptionHandler(BusinessNotFoundException bnf) {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "No business found"));
 	}
 	
+	@ExceptionHandler(BookingNotFoundException.class)
+	public ResponseEntity<?> bookingNotFoundExceptionHandler() {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "No booking was found"));
+	}
+	
+	@ExceptionHandler(CannotBookException.class)
+	public ResponseEntity<?> cannotBookException(CannotBookException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(InvalidTimeRangeException.class)
+	public ResponseEntity<?> invalidTimeRangeExceptionHandler(InvalidTimeRangeException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(InvalidTokenTypeException.class)
+	public ResponseEntity<?> invalidTokenTypeExceptionHandler(InvalidTokenTypeException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(NoOperatorException.class)
+	public ResponseEntity<?> noOperatorExceptionHandler (NoOperatorException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(ServiceNotFoundException.class)
+	public ResponseEntity<?> serviceNotFoundException(ServiceNotFoundException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(SlotNotAvailableException.class)
+	public ResponseEntity<?> slotNotAvailableExceptionHandler (SlotNotAvailableException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+	}
+	
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<?> catchAllHandler (Exception ex) {
+	public ResponseEntity<?> catchAllHandler(Exception ex) {
 		log.error("An unhandled Exception occurred: {}", ex.getMessage(), ex);
 		return ResponseEntity.internalServerError().body(Map.of("message", "Something went wrong. Please try again later"));
 	}

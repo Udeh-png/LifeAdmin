@@ -49,7 +49,7 @@ public class AuthService {
 		String tokenType = jwtService.getTokenType(refreshToken);
 		
 		if (tokenType.equals(TokenRole.ACCESS_TOKEN.getName()))
-			throw new InvalidTokenTypeException();
+			throw new InvalidTokenTypeException("You sent an access token instead of a refresh token");
 		
 		UserAccount user = userRepo.findByEmail(userEmail).orElse(null);
 		if (user != null)

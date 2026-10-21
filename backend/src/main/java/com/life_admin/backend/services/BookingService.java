@@ -60,7 +60,7 @@ public class BookingService {
 				.filter(
 						service1 -> service1.getId().equals(createBookingRequest.getServiceId())
 				).findFirst()
-				.orElseThrow();
+				.orElseThrow(ServiceNotFoundException::new);
 		
 		if (requestedDuration.compareTo(service.getLimit()) > 0)
 			throw new InvalidTimeRangeException("The duration you set is more than the limit of this service");
