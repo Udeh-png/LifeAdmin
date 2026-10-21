@@ -1,6 +1,7 @@
 package com.life_admin.backend.services;
 
 import com.life_admin.backend.DTOs.request.CreateBookingRequest;
+import com.life_admin.backend.DTOs.response.BookingResponse;
 import com.life_admin.backend.DTOs.response.CreateBookingResponse;
 import com.life_admin.backend.enums.BookingStatus;
 import com.life_admin.backend.exceptions.*;
@@ -15,12 +16,15 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class BookingService {
@@ -33,10 +37,13 @@ public class BookingService {
 	@Autowired
 	private MongoTemplate mongoTemplate;
 	
-	@Transactional
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
+		if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_BUSINESS")))
+			throw new CannotBookException();
+		
+		
 		if (!createBookingRequest.getAppointmentEndTime().isAfter(createBookingRequest.getAppointmentStartTime()))
-			throw new InvalidTimeRangeException("The start time you set is less than the end time");
+			throw new InvalidTimeRangeException("Time range is invalid");
 		
 		Duration requestedDuration = Duration.between(
 				createBookingRequest.getAppointmentStartTime(),
@@ -44,9 +51,9 @@ public class BookingService {
 		);
 		
 		BusinessAccount businessAccount = businessRepo.findById(
-				createBookingRequest.getBusinessId())
+						createBookingRequest.getBusinessId())
 				.orElseThrow(BusinessNotFoundException::new
-		);
+				);
 		
 		BusinessAccount.Service service = businessAccount.getServices()
 				.stream()
@@ -95,17 +102,11 @@ public class BookingService {
 		));
 		bookingRepo.save(booking);
 		
-		return new CreateBookingResponse(
-				booking.getId(),
-				businessAccount.getName(),
-				booking.getServiceName(),
-				booking.getAppointmentStartTime(),
-				booking.getAppointmentEndTime()
-		);
+		return new CreateBookingResponse(booking);
 	}
 	
 	@Transactional
-	public void cancelBooking (String id) {
+	public void cancelBooking(String id) {
 		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
 		
 		Update update = new Update().addToSet("services.$.availableSlots", booking.getAppointmentStartTime());
@@ -124,6 +125,82 @@ public class BookingService {
 						.and("status").is(BookingStatus.CONFIRMED)),
 				new Update().set("status", BookingStatus.CANCELLED),
 				Booking.class); // change status to cancelled
+	}
+	
+	public BookingResponse getBooking(String id, MyUserDetails userDetails) {
+		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
+		
+		if (!userDetails.getId().equals(booking.getBusinessId()) && !userDetails.getId().equals(booking.getUserId()))
+			throw new BookingNotFoundException();
+		
+		return new BookingResponse(booking);
+	}
+	
+	public List<BookingResponse> getBookings(
+			String serviceName,
+			String username,
+			String businessName,
+			Instant createdAtStartTime,
+			Instant createdAtEndTime,
+			String createdAtOperator,
+			String status,
+			Instant startTime,
+			String startTimeOperation,
+			MyUserDetails userDetails
+	) {
+		List<Criteria> criteriaList = new ArrayList<>();
+		criteriaList.add(new Criteria().orOperator(
+				Criteria.where("userId").is(userDetails.getId()),
+				Criteria.where("businessId").is(userDetails.getId())
+		));
+		
+		if (serviceName != null)
+			criteriaList.add(Criteria.where("serviceName").regex(serviceName, "i"));
+		
+		if (username != null)
+			criteriaList.add(Criteria.where("userInfo.userName").regex(username, "i"));
+		
+		if (businessName != null)
+			criteriaList.add(Criteria.where("businessName").regex(businessName, "i"));
+		
+		if (status != null)
+			criteriaList.add(Criteria.where("status").is(status));
+		
+		if (createdAtStartTime != null && createdAtEndTime == null) {
+			criteriaList.add(applyTimeOperator(createdAtOperator, "createdAt", createdAtStartTime));
+		}
+		
+		if (createdAtEndTime != null && createdAtStartTime != null) {
+			if (!createdAtEndTime.isAfter(createdAtStartTime)) {
+				throw new InvalidTimeRangeException("Time range is invalid");
+			}
+			
+			criteriaList.add(Criteria.where("createdAt").gte(createdAtStartTime).lte(createdAtEndTime));
+			// is on or after start time but on or before endtime
+		}
+		if (startTime != null) {
+			criteriaList.add(applyTimeOperator(startTimeOperation, "appointmentStartTime", startTime));
+		}
+		
+		Criteria criteria = new Criteria().andOperator(criteriaList);
+		Query query = Query.query(criteria);
+		
+		return mongoTemplate.find(query, Booking.class).stream().map(BookingResponse::new).toList();
+	}
+	
+	private Criteria applyTimeOperator(String op, String field, Instant value) {
+		if (op == null)
+			throw new NoOperatorException();
+		
+		return switch (op.toUpperCase()) {
+			case "EQ" -> Criteria.where(field).is(value);
+			case "GT" -> Criteria.where(field).gt(value); // after given date/time
+			case "LT" -> Criteria.where(field).lt(value); // before given date/time
+			case "GTE" -> Criteria.where(field).gte(value); // on or after given date/time
+			case "LTE" -> Criteria.where(field).lte(value); // on or before given date/time
+			
+			default -> throw new IllegalArgumentException("Unknown operator: " + op);
+		};
 	}
 }
 
