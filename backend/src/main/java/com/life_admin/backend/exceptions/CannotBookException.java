@@ -2,6 +2,6 @@ package com.life_admin.backend.exceptions;
 
 public class CannotBookException extends RuntimeException {
 	public CannotBookException() {
-		super("Business cannot create bookings");
+		super("Businesses cannot create bookings, you knob");
 	}
 }

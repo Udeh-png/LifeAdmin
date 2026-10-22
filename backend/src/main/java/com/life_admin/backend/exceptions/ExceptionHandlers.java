@@ -46,7 +46,7 @@ public class ExceptionHandlers {
 	
 	@ExceptionHandler(CannotBookException.class)
 	public ResponseEntity<?> cannotBookException(CannotBookException e) {
-		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", e.getMessage()));
 	}
 	
 	@ExceptionHandler(InvalidTimeRangeException.class)
@@ -56,7 +56,7 @@ public class ExceptionHandlers {
 	
 	@ExceptionHandler(InvalidTokenTypeException.class)
 	public ResponseEntity<?> invalidTokenTypeExceptionHandler(InvalidTokenTypeException e) {
-		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", e.getMessage()));
 	}
 	
 	@ExceptionHandler(NoOperatorException.class)
@@ -66,12 +66,12 @@ public class ExceptionHandlers {
 	
 	@ExceptionHandler(ServiceNotFoundException.class)
 	public ResponseEntity<?> serviceNotFoundException(ServiceNotFoundException e) {
-		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
 	}
 	
 	@ExceptionHandler(SlotNotAvailableException.class)
 	public ResponseEntity<?> slotNotAvailableExceptionHandler (SlotNotAvailableException e) {
-		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
 	}
 	
 	@ExceptionHandler(Exception.class)
