@@ -1,0 +1,29 @@
+package com.life_admin.backend.controllers;
+
+import com.life_admin.backend.DTOs.request.AddServicesRequest;
+import com.life_admin.backend.services.BusinessAccountService;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+
+@RestController
+@RequestMapping("/api/v1/business-account")
+public class BusinessAccountController {
+	
+	@Autowired
+	private BusinessAccountService businessAccountService;
+	
+	@PostMapping("/add-service")
+	ResponseEntity<?> addService (@RequestBody @Valid AddServicesRequest service) throws URISyntaxException {
+		businessAccountService.addService(service);
+		
+		return ResponseEntity.created(new URI("")).build();
+	}
+}

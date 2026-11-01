@@ -4,7 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 
 @Data
 @AllArgsConstructor
@@ -13,5 +15,6 @@ public class CreateBookingRequest {
 	private String businessId;
 	private String serviceId;
 	private Instant appointmentStartTime;
-	private Instant appointmentEndTime;
+	private Duration appointmentDuration;
+	private ZoneId zoneId;
 }

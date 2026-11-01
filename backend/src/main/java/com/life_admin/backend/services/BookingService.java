@@ -10,8 +10,10 @@ import com.life_admin.backend.models.BusinessAccount;
 import com.life_admin.backend.repositories.BookingRepo;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
+import com.mongodb.MongoException;
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -20,11 +22,14 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Duration;
-import java.time.Instant;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.zip.DataFormatException;
 
 @Service
 public class BookingService {
@@ -37,18 +42,19 @@ public class BookingService {
 	@Autowired
 	private MongoTemplate mongoTemplate;
 	
+	@Autowired
+	private TransactionTemplate template;
+	
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
 		if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_BUSINESS")))
 			throw new CannotBookException();
 		
+		Instant requestedStartTime = createBookingRequest.getAppointmentStartTime();
+		Instant requestedEndTime = requestedStartTime
+				.plusSeconds(
+						createBookingRequest.getAppointmentDuration().toSeconds()
+				);
 		
-		if (!createBookingRequest.getAppointmentEndTime().isAfter(createBookingRequest.getAppointmentStartTime()))
-			throw new InvalidTimeRangeException("Time range is invalid");
-		
-		Duration requestedDuration = Duration.between(
-				createBookingRequest.getAppointmentStartTime(),
-				createBookingRequest.getAppointmentEndTime()
-		);
 		
 		BusinessAccount businessAccount = businessRepo.findById(
 						createBookingRequest.getBusinessId())
@@ -58,29 +64,71 @@ public class BookingService {
 		BusinessAccount.Service service = businessAccount.getServices()
 				.stream()
 				.filter(
-						service1 -> service1.getId().equals(createBookingRequest.getServiceId())
+						s -> s.getId().equals(createBookingRequest.getServiceId())
 				).findFirst()
 				.orElseThrow(ServiceNotFoundException::new);
 		
-		if (requestedDuration.compareTo(service.getLimit()) > 0)
+		checkWithinOpeningHours(businessAccount, service, requestedStartTime, requestedEndTime);
+		
+		if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMax()) > 0)
 			throw new InvalidTimeRangeException("The duration you set is more than the limit of this service");
+		
+		if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMin()) < 0)
+			throw new InvalidTimeRangeException("The duration you set is less than the limit of this service");
+		
+		int attempts = 0;
+		int MAX_RETRY_ATTEMPTS = 3;
+		
+		for (; ; ) {
+			attempts++;
+			try {
+				return template.execute(status ->
+						createBookingTransactional(service, userDetails, businessAccount, createBookingRequest, requestedEndTime)
+				);
+			} catch (DataAccessException e) {
+				if (!isTransient(e))
+					throw e;
+				
+				if (attempts >= MAX_RETRY_ATTEMPTS)
+					throw new CannotBookException();
+				
+				pauseThreadAndRetry();
+			}
+		}
+	}
+	
+	private CreateBookingResponse createBookingTransactional(
+			BusinessAccount.Service service,
+			MyUserDetails userDetails,
+			BusinessAccount businessAccount,
+			CreateBookingRequest createBookingRequest,
+			Instant requestedEndTime
+	) {
+		
+		mongoTemplate.updateFirst(
+				Query.query(Criteria.where("services.id").is(service.getId())),
+				new Update().inc("services.$.bookingSequence", 1),
+				BusinessAccount.class
+		); // this prevents race condition because if two different transactional sessions try to update a doc at once mongodb does not allow it
+		
+		Query query = Query.query(
+				new Criteria().andOperator(
+						Criteria.where("serviceId").is(createBookingRequest.getServiceId()),
+						Criteria.where("status").not().is(BookingStatus.CANCELLED),
+						Criteria.where("appointmentEndTime").gt(createBookingRequest.getAppointmentStartTime()),
+						Criteria.where("appointmentStartTime").lt(requestedEndTime)
+				)
+		);
+		
+		Optional<Booking> bookingOpt = mongoTemplate.find(query, Booking.class)
+				.stream()
+				.findFirst();
+		
+		if (bookingOpt.isPresent())
+			throw new SlotNotAvailableException();
 		
 		if (businessAccount.getBookingApiUrl() != null) {
 			// call booking api url
-		} else {
-			Criteria criteria = Criteria.where("_id").is(businessAccount.getId()).and("services").elemMatch(
-					new Criteria().andOperator(
-							Criteria.where("id").is(createBookingRequest.getServiceId()),
-							Criteria.where("availableSlots").is(createBookingRequest.getAppointmentStartTime())
-					)
-			);
-			Update update = new Update().pull("services.$.availableSlots", createBookingRequest.getAppointmentStartTime());
-			FindAndModifyOptions options = FindAndModifyOptions.options().returnNew(false).upsert(false);
-			BusinessAccount claimed = mongoTemplate.findAndModify(Query.query(criteria), update, options, BusinessAccount.class);
-			
-			if (claimed == null) {
-				throw new SlotNotAvailableException();
-			}
 		}
 		
 		Booking booking = (new Booking(
@@ -90,7 +138,7 @@ public class BookingService {
 				service.getName(),
 				service.getId(),
 				createBookingRequest.getAppointmentStartTime(),
-				createBookingRequest.getAppointmentEndTime(),
+				requestedEndTime,
 				BookingStatus.CONFIRMED,
 				Instant.now()
 		));
@@ -105,20 +153,51 @@ public class BookingService {
 		return new CreateBookingResponse(booking);
 	}
 	
+	private void checkWithinOpeningHours(BusinessAccount business, BusinessAccount.Service service,
+	                                     Instant start, Instant end) {
+		BusinessAccount.WorkTime rule = service.getWorkTime() != null
+				? service.getWorkTime()
+				: business.getWorkingTime();
+		
+		LocalDateTime s = start.atZone(business.getZoneId()).toLocalDateTime();
+		LocalDateTime e = end.atZone(business.getZoneId()).toLocalDateTime();
+		
+		BusinessAccount.DayHours day = rule.getDaysHoursMap().get(s.getDayOfWeek());
+		if (day == null)
+			throw new BusinessAlreadyClosedException();    // closed that day
+		
+		if (s.toLocalTime().isBefore(day.openTime()))
+			throw new NotYetOpenException();
+		
+		if (e.toLocalTime().isAfter(day.closeTime()))
+			throw new BusinessAlreadyClosedException();
+	}
+	
+	private void pauseThreadAndRetry() {
+		try {
+			long base = 20L;
+			long jitter = ThreadLocalRandom.current().nextLong(base);
+			
+			Thread.sleep(base + jitter);
+			
+		} catch (InterruptedException ie) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException(ie);
+		}
+	}
+	
+	private boolean isTransient(Throwable t) {
+		for (; t != null; t = t.getCause()) {
+			if (t instanceof MongoException me && me.hasErrorLabel("TransientTransactionError"))
+				return true;
+		}
+		
+		return false;
+	}
+	
 	@Transactional
 	public void cancelBooking(String id) {
 		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
-		
-		Update update = new Update().addToSet("services.$.availableSlots", booking.getAppointmentStartTime());
-		
-		Query query = Query.query(Criteria.where("_id")
-				.is(booking.getBusinessId())
-				.and("services")
-				.elemMatch(
-						Criteria.where("id").is(booking.getServiceId())
-				));
-		
-		mongoTemplate.updateFirst(query, update, BusinessAccount.class); // add the slot back
 		
 		mongoTemplate.updateFirst(
 				Query.query(Criteria.where("_id").is(booking.getId())

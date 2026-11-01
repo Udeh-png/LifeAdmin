@@ -1,6 +1,8 @@
 package com.life_admin.backend.data;
 
 import com.life_admin.backend.models.BusinessAccount;
+import com.life_admin.backend.models.BusinessAccount.WorkTime;
+import com.life_admin.backend.models.BusinessAccount.DayHours;
 import com.life_admin.backend.models.UserAccount;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.repositories.UserRepository;
@@ -9,9 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
-import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 class DataSeeder {
@@ -30,77 +36,47 @@ class DataSeeder {
 		if (businessRepo.count() > 0 || userRepo.count() > 0) return;
 		
 		String pw = passwordEncoder.encode("password123");
+		ZoneId lagos = ZoneId.of("Africa/Lagos");
 		
-		// Business 1: clinic in Lekki
-		BusinessAccount clinic1 = new BusinessAccount();
-		clinic1.setEmail("lekkiclinic@lifeadmin.test");
-		clinic1.setPassword(pw);
-		clinic1.setName("Lagos Medical Clinic");
-		clinic1.setCategory("clinic");
-		clinic1.setLocation("Lekki");
+		// Clinic in Lekki: Mon-Fri 9:00-19:00
+		BusinessAccount clinic1 = business("lekkiclinic@lifeadmin.test", pw,
+				"Lagos Medical Clinic", "clinic", "Lekki", lagos, weekdays("09:00", "19:00"));
 		clinic1.setServices(List.of(
-				new BusinessAccount.Service("svc-clinic1-consult", "Consultation",
-						Duration.ofMinutes(30), List.of(
-						Instant.parse("2026-10-20T14:00:00Z"),
-						Instant.parse("2026-10-20T14:30:00Z"))),
-				new BusinessAccount.Service("svc-clinic1-vacc", "Vaccination",
-						Duration.ofMinutes(15), List.of(
-						Instant.parse("2026-10-20T10:00:00Z"),
-						Instant.parse("2026-10-21T10:00:00Z")))
+				service("svc-clinic1-consult", "Consultation with Dr. Okafor", 20, 30, null),
+				service("svc-clinic1-vacc", "Vaccination", 10, 15, null)
 		));
 		businessRepo.save(clinic1);
 		
-		// Business 2: clinic in Mainland
-		BusinessAccount clinic2 = new BusinessAccount();
-		clinic2.setEmail("mainlandclinic@lifeadmin.test");
-		clinic2.setPassword(pw);
-		clinic2.setName("Mainland Health Center");
-		clinic2.setCategory("clinic");
-		clinic2.setLocation("Mainland");
+		// Clinic in Mainland: Mon-Fri 9:00-17:00, Saturday 9:00-13:00, closed Sunday
+		WorkTime mainlandHours = weekdays("09:00", "17:00");
+		mainlandHours.getDaysHoursMap().put(DayOfWeek.SATURDAY,
+				new BusinessAccount.DayHours ("09:00", "13:00"));
+		BusinessAccount clinic2 = business("mainlandclinic@lifeadmin.test", pw,
+				"Mainland Health Center", "clinic", "Mainland", lagos, mainlandHours);
 		clinic2.setServices(List.of(
-				new BusinessAccount.Service("svc-clinic2-lab", "Lab Test",
-						Duration.ofMinutes(60), List.of(
-						Instant.parse("2026-10-20T09:00:00Z"),
-						Instant.parse("2026-10-22T09:00:00Z"))),
-				new BusinessAccount.Service("svc-clinic2-vacc", "Vaccination",
-						Duration.ofMinutes(15), List.of(
-						Instant.parse("2026-10-20T16:00:00Z")))
+				service("svc-clinic2-lab", "Lab Test", 30, 60, null),
+				service("svc-clinic2-vacc", "Vaccination", 10, 15, null)
 		));
 		businessRepo.save(clinic2);
 		
-		// Business 3: gym in Lekki
-		BusinessAccount gym1 = new BusinessAccount();
-		gym1.setEmail("fithub@lifeadmin.test");
-		gym1.setPassword(pw);
-		gym1.setName("FitHub Lagos");
-		gym1.setCategory("gym");
-		gym1.setLocation("Lekki");
+		// Gym in Lekki: Mon-Fri 6:00-21:00. Yoga has its own shorter hours.
+		BusinessAccount gym1 = business("fithub@lifeadmin.test", pw,
+				"FitHub Lagos", "gym", "Lekki", lagos, weekdays("06:00", "21:00"));
 		gym1.setServices(List.of(
-				new BusinessAccount.Service("svc-gym1-pt", "Personal Training Session",
-						Duration.ofMinutes(60), List.of(
-						Instant.parse("2026-10-20T06:00:00Z"),
-						Instant.parse("2026-10-20T18:00:00Z"))),
-				new BusinessAccount.Service("svc-gym1-yoga", "Yoga Lessons",
-						Duration.ofMinutes(45), List.of(
-						Instant.parse("2026-10-21T07:00:00Z")))
+				service("svc-gym1-pt", "Personal Training Session", 45, 60, null),
+				service("svc-gym1-yoga", "Yoga Lessons", 30, 45, weekdays("07:00", "10:00"))
 		));
 		businessRepo.save(gym1);
 		
-		// Business 4: gym in Mainland
-		BusinessAccount gym2 = new BusinessAccount();
-		gym2.setEmail("sosogym@lifeadmin.test");
-		gym2.setPassword(pw);
-		gym2.setName("Soso Gym");
-		gym2.setCategory("gym");
-		gym2.setLocation("Mainland");
+		// Gym in Mainland: Mon-Fri 8:00-20:00, Saturday 9:00-14:00, closed Sunday
+		WorkTime sosoHours = weekdays("08:00", "20:00");
+		sosoHours.getDaysHoursMap().put(DayOfWeek.SATURDAY,
+				new DayHours("09:00","14:00"));
+		BusinessAccount gym2 = business("sosogym@lifeadmin.test", pw,
+				"Soso Gym", "gym", "Mainland", lagos, sosoHours);
 		gym2.setServices(List.of(
-				new BusinessAccount.Service("svc-gym2-swim", "Swimming Lessons",
-						Duration.ofMinutes(45), List.of(
-						Instant.parse("2026-10-20T08:00:00Z"),
-						Instant.parse("2026-10-22T08:00:00Z"))),
-				new BusinessAccount.Service("svc-gym2-spin", "Spin Class",
-						Duration.ofMinutes(45), List.of(
-						Instant.parse("2026-10-21T17:00:00Z")))
+				service("svc-gym2-swim", "Swimming Lessons", 30, 45, null),
+				service("svc-gym2-spin", "Spin Class", 45, 45, null)
 		));
 		businessRepo.save(gym2);
 		
@@ -118,5 +94,40 @@ class DataSeeder {
 		bob.setPassword(pw);
 		bob.setPhoneNumber("+2348098765432");
 		userRepo.save(bob);
+	}
+	
+	private static BusinessAccount business(String email, String pw, String name, String category,
+	                                        String location, ZoneId zone, WorkTime hours) {
+		BusinessAccount b = new BusinessAccount();
+		b.setEmail(email);
+		b.setPassword(pw);
+		b.setName(name);
+		b.setCategory(category);
+		b.setLocation(location);
+		b.setZoneId(zone);
+		b.setWorkingTime(hours);
+		return b;
+	}
+	
+	private static BusinessAccount.Service service(String id, String name, int minMinutes,
+	                                               int maxMinutes, WorkTime override) {
+		BusinessAccount.Service s = new BusinessAccount.Service();
+		s.setId(id);
+		s.setName(name);
+		s.setBookingSequence(0L);
+		s.setSessionMin(Duration.ofMinutes(minMinutes));
+		s.setSessionMax(Duration.ofMinutes(maxMinutes));
+		s.setWorkTime(override);   // null means "use the business's working time"
+		return s;
+	}
+	
+	// Monday to Friday with the same hours
+	private static WorkTime weekdays(String openHour, String closeHour) {
+		Map<DayOfWeek, DayHours> map = new HashMap<>();
+		for (DayOfWeek day : List.of(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+				DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)) {
+			map.put(day, new DayHours(openHour, closeHour));
+		}
+		return new WorkTime(map);
 	}
 }

@@ -5,9 +5,11 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.Duration;
-import java.time.Instant;
+import java.time.*;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -29,6 +31,13 @@ public class BusinessAccount {
 	private String location;
 	@NonNull
 	private List<Service> services;
+	@NonNull
+	private WorkTime workingTime;
+	@NonNull
+	private ZoneId zoneId;
+	
+	private Duration sessionMax;
+	private Duration sessionMin;
 	
 	private String bookingApiUrl;
 	
@@ -38,7 +47,32 @@ public class BusinessAccount {
 	public static class Service {
 		private String id;
 		private String name;
-		private Duration limit;
-		private List<Instant> availableSlots;
+		private Long bookingSequence;
+		private Duration sessionMax;
+		private Duration sessionMin;
+		private WorkTime workTime;
+	}
+	
+	@Data
+	@AllArgsConstructor
+	@NoArgsConstructor
+	public static class WorkTime {
+		private Map<DayOfWeek, DayHours> daysHoursMap;
+	}
+	
+	@Data
+	@AllArgsConstructor
+	@NoArgsConstructor
+	public static class DayHours {
+		private String open;
+		private String close;
+		
+		public LocalTime openTime () {
+			return LocalTime.parse(open);
+		}
+		
+		public LocalTime closeTime () {
+			return LocalTime.parse(close);
+		}
 	}
 }

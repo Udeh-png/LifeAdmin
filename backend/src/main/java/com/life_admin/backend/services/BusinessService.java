@@ -71,7 +71,7 @@ public class BusinessService {
 	public List<Instant> getAvailableSlots(String id, String serviceId) {
 		BusinessAccount businessAccount = businessRepo.findById(id).orElseThrow(BusinessNotFoundException::new);
 		
-		BusinessAccount.Service service = businessAccount.getServices()
+		BusinessAccount.Service businessAccService = businessAccount.getServices()
 				.stream()
 				.filter(s -> s.getId().equals(serviceId))
 				.findFirst()
@@ -79,6 +79,6 @@ public class BusinessService {
 		
 		
 		
-		return service.getAvailableSlots();
+		return null;
 	}
 }
