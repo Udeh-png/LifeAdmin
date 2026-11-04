@@ -37,8 +37,8 @@ public class BookingController {
 	}
 	
 	@DeleteMapping("/{id}")
-	ResponseEntity<?> cancelBooking(@PathVariable String id) {
-		bookingService.cancelBooking(id);
+	ResponseEntity<?> cancelBooking(@PathVariable String id, @AuthenticationPrincipal MyUserDetails userDetails) {
+		bookingService.cancelBooking(id, userDetails);
 		
 		return ResponseEntity.noContent().build();
 	}

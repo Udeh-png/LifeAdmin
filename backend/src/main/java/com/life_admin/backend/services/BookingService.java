@@ -47,14 +47,7 @@ public class BookingService {
 	
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
 		if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_BUSINESS")))
-			throw new CannotBookException();
-		
-		Instant requestedStartTime = createBookingRequest.getAppointmentStartTime();
-		Instant requestedEndTime = requestedStartTime
-				.plusSeconds(
-						createBookingRequest.getAppointmentDuration().toSeconds()
-				);
-		
+			throw new CannotBookException("Businesses cannot create bookings, you knob");
 		
 		BusinessAccount businessAccount = businessRepo.findById(
 						createBookingRequest.getBusinessId())
@@ -68,13 +61,25 @@ public class BookingService {
 				).findFirst()
 				.orElseThrow(ServiceNotFoundException::new);
 		
+		if (service.getSessionDuration() != null) {
+			if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionDuration()) != 0)
+				throw new CannotBookException("This service is fixed at "
+						+ service.getSessionDuration().toMinutes() + " mins");
+		} else if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMax()) > 0 ||
+				createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMin()) < 0) {
+			throw new CannotBookException("This service has a maximum duration of "
+					+ service.getSessionMax().toMinutes()
+					+ " mins and a minimum of "
+					+ service.getSessionMin());
+		}
+		
+		Instant requestedStartTime = createBookingRequest.getAppointmentStartTime();
+		Instant requestedEndTime = requestedStartTime
+				.plusSeconds(
+						createBookingRequest.getAppointmentDuration().toSeconds()
+				);
+		
 		checkWithinOpeningHours(businessAccount, service, requestedStartTime, requestedEndTime);
-		
-		if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMax()) > 0)
-			throw new InvalidTimeRangeException("The duration you set is more than the limit of this service");
-		
-		if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMin()) < 0)
-			throw new InvalidTimeRangeException("The duration you set is less than the limit of this service");
 		
 		int attempts = 0;
 		int MAX_RETRY_ATTEMPTS = 3;
@@ -90,30 +95,25 @@ public class BookingService {
 					throw e;
 				
 				if (attempts >= MAX_RETRY_ATTEMPTS)
-					throw new CannotBookException();
+					throw new CannotBookException("");
 				
 				pauseThreadAndRetry();
 			}
 		}
 	}
 	
-	private CreateBookingResponse createBookingTransactional(
-			BusinessAccount.Service service,
-			MyUserDetails userDetails,
-			BusinessAccount businessAccount,
-			CreateBookingRequest createBookingRequest,
-			Instant requestedEndTime
-	) {
-		
+	private CreateBookingResponse createBookingTransactional(BusinessAccount.Service service, MyUserDetails userDetails,
+	                                                         BusinessAccount businessAccount, CreateBookingRequest createBookingRequest,
+	                                                         Instant requestedEndTime) {
 		mongoTemplate.updateFirst(
-				Query.query(Criteria.where("services.id").is(service.getId())),
-				new Update().inc("services.$.bookingSequence", 1),
+				Query.query(Criteria.where("_id").is(businessAccount.getId())),
+				new Update().inc("bookingSequence", 1),
 				BusinessAccount.class
 		); // this prevents race condition because if two different transactional sessions try to update a doc at once mongodb does not allow it
 		
 		Query query = Query.query(
 				new Criteria().andOperator(
-						Criteria.where("serviceId").is(createBookingRequest.getServiceId()),
+						Criteria.where("businessId").is(createBookingRequest.getServiceId()),
 						Criteria.where("status").not().is(BookingStatus.CANCELLED),
 						Criteria.where("appointmentEndTime").gt(createBookingRequest.getAppointmentStartTime()),
 						Criteria.where("appointmentStartTime").lt(requestedEndTime)
@@ -155,6 +155,9 @@ public class BookingService {
 	
 	private void checkWithinOpeningHours(BusinessAccount business, BusinessAccount.Service service,
 	                                     Instant start, Instant end) {
+		if (start.isBefore(Instant.now()))
+			throw new InvalidTimeRangeException("Are you dumb?");
+		
 		BusinessAccount.WorkTime rule = service.getWorkTime() != null
 				? service.getWorkTime()
 				: business.getWorkingTime();
@@ -179,7 +182,6 @@ public class BookingService {
 			long jitter = ThreadLocalRandom.current().nextLong(base);
 			
 			Thread.sleep(base + jitter);
-			
 		} catch (InterruptedException ie) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException(ie);
@@ -195,9 +197,16 @@ public class BookingService {
 		return false;
 	}
 	
-	@Transactional
-	public void cancelBooking(String id) {
+	public void cancelBooking(String id, MyUserDetails userDetails) {
 		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
+		boolean isOwner = userDetails.getId().equals(booking.getUserId());
+		boolean isBusiness = userDetails.getId().equals(booking.getBusinessId());
+		
+		if (!isBusiness && !isOwner)
+			throw new BookingNotFoundException();
+		
+		if (booking.getAppointmentStartTime().isBefore(Instant.now()))
+			throw new CannotCancelBookingException("Cannot cancel an appointment after it has started");
 		
 		mongoTemplate.updateFirst(
 				Query.query(Criteria.where("_id").is(booking.getId())
@@ -215,18 +224,10 @@ public class BookingService {
 		return new BookingResponse(booking);
 	}
 	
-	public List<BookingResponse> getBookings(
-			String serviceName,
-			String username,
-			String businessName,
-			Instant createdAtStartTime,
-			Instant createdAtEndTime,
-			String createdAtOperator,
-			String status,
-			Instant startTime,
-			String startTimeOperation,
-			MyUserDetails userDetails
-	) {
+	public List<BookingResponse> getBookings(String serviceName, String username, String businessName,
+	                                         Instant createdAtStartTime, Instant createdAtEndTime, String createdAtOperator,
+	                                         String status, Instant startTime, String startTimeOperation, MyUserDetails userDetails) {
+		
 		List<Criteria> criteriaList = new ArrayList<>();
 		criteriaList.add(new Criteria().orOperator(
 				Criteria.where("userId").is(userDetails.getId()),

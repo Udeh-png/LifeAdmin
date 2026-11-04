@@ -36,6 +36,8 @@ public class BusinessAccount {
 	@NonNull
 	private ZoneId zoneId;
 	
+	private Long bookingSequence;
+	
 	private Duration sessionMax;
 	private Duration sessionMin;
 	
@@ -47,9 +49,11 @@ public class BusinessAccount {
 	public static class Service {
 		private String id;
 		private String name;
-		private Long bookingSequence;
+		
+		private Duration sessionDuration;
 		private Duration sessionMax;
 		private Duration sessionMin;
+		
 		private WorkTime workTime;
 	}
 	
