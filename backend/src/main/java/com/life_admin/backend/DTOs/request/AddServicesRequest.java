@@ -1,5 +1,6 @@
 package com.life_admin.backend.DTOs.request;
 
+import com.life_admin.backend.models.BusinessAccount;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.Size;
@@ -16,10 +17,8 @@ import java.util.List;
 @NoArgsConstructor
 public class AddServicesRequest {
 	private String serviceName;
-	private Duration duration;
-	
-	@ArraySchema(maxItems = 2)
-	@Size(max = 2, message = "Cant be more than 2 values mate")
-	@Nullable
-	private List<Instant> workingHours;
+	private Long serviceDuration;
+	private Long minService;
+	private Long maxService;
+	private BusinessAccount.WorkTime workTime;
 }

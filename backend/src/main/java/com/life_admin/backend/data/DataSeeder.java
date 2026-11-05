@@ -102,6 +102,7 @@ class DataSeeder {
 		b.setEmail(email);
 		b.setPassword(pw);
 		b.setName(name);
+		b.setBookingSequence(0L);
 		b.setCategory(category);
 		b.setLocation(location);
 		b.setZoneId(zone);
@@ -114,7 +115,6 @@ class DataSeeder {
 		BusinessAccount.Service s = new BusinessAccount.Service();
 		s.setId(id);
 		s.setName(name);
-		s.setBookingSequence(0L);
 		s.setSessionMin(Duration.ofMinutes(minMinutes));
 		s.setSessionMax(Duration.ofMinutes(maxMinutes));
 		s.setWorkTime(override);   // null means "use the business's working time"

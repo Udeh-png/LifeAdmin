@@ -32,7 +32,7 @@ public class MyUserDetails implements UserDetails {
 		this.email = user.getEmail();
 		this.password = user.getPassword();
 		this.phoneNumber = user.getPhoneNumber();
-		this.authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+		this.authorities = List.of(new SimpleGrantedAuthority("USER"));
 	}
 	
 	public MyUserDetails(BusinessAccount business) {
@@ -40,7 +40,7 @@ public class MyUserDetails implements UserDetails {
 		this.username = business.getName();
 		this.email = business.getEmail();
 		this.password = business.getPassword();
-		this.authorities = List.of(new SimpleGrantedAuthority("ROLE_BUSINESS"));
+		this.authorities = List.of(new SimpleGrantedAuthority("BUSINESS"));
 		phoneNumber = null;
 	}
 	

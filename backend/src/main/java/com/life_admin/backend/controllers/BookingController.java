@@ -8,6 +8,7 @@ import com.life_admin.backend.services.BookingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,7 @@ public class BookingController {
 	private BookingService bookingService;
 	
 	@PostMapping("/create")
+	@PreAuthorize("hasRole('USER')")
 	ResponseEntity<?> createBooking(@RequestBody CreateBookingRequest request, @AuthenticationPrincipal MyUserDetails userDetails) {
 		CreateBookingResponse createBookingResponse = bookingService.createBooking(request, userDetails);
 		

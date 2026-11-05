@@ -46,9 +46,6 @@ public class BookingService {
 	private TransactionTemplate template;
 	
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
-		if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_BUSINESS")))
-			throw new CannotBookException("Businesses cannot create bookings, you knob");
-		
 		BusinessAccount businessAccount = businessRepo.findById(
 						createBookingRequest.getBusinessId())
 				.orElseThrow(BusinessNotFoundException::new
@@ -62,21 +59,23 @@ public class BookingService {
 				.orElseThrow(ServiceNotFoundException::new);
 		
 		if (service.getSessionDuration() != null) {
-			if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionDuration()) != 0)
+			if (createBookingRequest.getAppointmentDurationMins() != service.getSessionDuration().toMinutes())
 				throw new CannotBookException("This service is fixed at "
 						+ service.getSessionDuration().toMinutes() + " mins");
-		} else if (createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMax()) > 0 ||
-				createBookingRequest.getAppointmentDuration().compareTo(service.getSessionMin()) < 0) {
+		} else if (createBookingRequest.getAppointmentDurationMins() > service.getSessionMax().toMinutes() ||
+				createBookingRequest.getAppointmentDurationMins() < service.getSessionMin().toMinutes()) {
 			throw new CannotBookException("This service has a maximum duration of "
 					+ service.getSessionMax().toMinutes()
 					+ " mins and a minimum of "
 					+ service.getSessionMin());
 		}
 		
+		Duration requestedDuration = Duration.ofMinutes(createBookingRequest.getAppointmentDurationMins());
+		
 		Instant requestedStartTime = createBookingRequest.getAppointmentStartTime();
 		Instant requestedEndTime = requestedStartTime
 				.plusSeconds(
-						createBookingRequest.getAppointmentDuration().toSeconds()
+						requestedDuration.toSeconds()
 				);
 		
 		checkWithinOpeningHours(businessAccount, service, requestedStartTime, requestedEndTime);

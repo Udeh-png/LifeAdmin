@@ -1,10 +1,13 @@
 package com.life_admin.backend.controllers;
 
 import com.life_admin.backend.DTOs.request.AddServicesRequest;
+import com.life_admin.backend.security.MyUserDetails;
 import com.life_admin.backend.services.BusinessAccountService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,8 +24,9 @@ public class BusinessAccountController {
 	private BusinessAccountService businessAccountService;
 	
 	@PostMapping("/add-service")
-	ResponseEntity<?> addService (@RequestBody @Valid AddServicesRequest service) throws URISyntaxException {
-		businessAccountService.addService(service);
+	@PreAuthorize("hasRole('BUSINESS')")
+	ResponseEntity<?> addService (@RequestBody @Valid AddServicesRequest service, @AuthenticationPrincipal MyUserDetails userDetails) throws URISyntaxException {
+		businessAccountService.addService(service, userDetails);
 		
 		return ResponseEntity.created(new URI("")).build();
 	}

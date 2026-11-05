@@ -5,6 +5,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -72,6 +73,11 @@ public class ExceptionHandlers {
 	@ExceptionHandler(SlotNotAvailableException.class)
 	public ResponseEntity<?> slotNotAvailableExceptionHandler (SlotNotAvailableException e) {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+	}
+	
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<?> httpRequestMethodNotSupportedHandler (HttpRequestMethodNotSupportedException e) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
 	}
 	
 	@ExceptionHandler(Exception.class)
