@@ -28,13 +28,16 @@ public class BusinessAccount {
 	@NonNull
 	private String category;
 	@NonNull
-	private String location;
+	private String location; // TODO: change location to an object with state, area, city, country and address fields
 	@NonNull
 	private List<Service> services;
 	@NonNull
 	private WorkTime workingTime;
 	@NonNull
 	private ZoneId zoneId;
+	
+	private boolean emailIsVerified;
+	private boolean isPublished;
 	
 	private Long bookingSequence;
 	

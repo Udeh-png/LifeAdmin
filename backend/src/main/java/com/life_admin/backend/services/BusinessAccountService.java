@@ -1,23 +1,19 @@
 package com.life_admin.backend.services;
 
 import com.life_admin.backend.DTOs.request.AddServicesRequest;
-import com.life_admin.backend.exceptions.BusinessNotFoundException;
-import com.life_admin.backend.exceptions.InvalidServiceException;
-import com.life_admin.backend.exceptions.InvalidTimeRangeException;
-import com.life_admin.backend.exceptions.ServiceNameAlreadyExists;
+import com.life_admin.backend.exceptions.*;
 import com.life_admin.backend.models.BusinessAccount;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,6 +21,8 @@ public class BusinessAccountService {
 	
 	@Autowired
 	BusinessAccountRepo businessRepo;
+	@Autowired
+	MongoTemplate mongoTemplate;
 	
 	public void addService(AddServicesRequest serviceReq, MyUserDetails userDetails) {
 		BusinessAccount business = businessRepo.findById(userDetails.getId()).orElseThrow(BusinessNotFoundException::new);
@@ -57,6 +55,43 @@ public class BusinessAccountService {
 		service.setWorkTime(serviceReq.getWorkTime());
 		business.getServices().add(service);
 		
+		if (!business.isPublished())
+			business.setPublished(true);
+		
 		businessRepo.save(business);
+	}
+	
+	public void profileSetting(String name, String category, String location, String email, MyUserDetails userDetails) {
+		Update update = new Update();
+		
+		if (name != null)
+			update.set("name", name.trim());
+		
+		if (category != null)
+			update.set("category", category.trim());
+		
+		if (location != null)
+			update.set("location", location.trim());
+		
+		if (email != null) {
+			update.set("email", email.trim());
+			update.set("emailIsVerified", false);
+		}
+		
+		if (update.getUpdateObject().isEmpty())
+			return;
+		
+		try {
+			mongoTemplate.updateFirst(
+					Query.query(Criteria.where("_id").is(userDetails.getId())),
+					update,
+					BusinessAccount.class
+			);
+		} catch (DuplicateKeyException dke) {
+			if (dke.getMessage().contains("email"))
+				throw new EmailAlreadyExistsException();
+			
+			throw dke;
+		}
 	}
 }
