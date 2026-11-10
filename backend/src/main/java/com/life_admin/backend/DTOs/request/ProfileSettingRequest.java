@@ -1,18 +1,24 @@
 package com.life_admin.backend.DTOs.request;
 
+import com.life_admin.backend.utils.OptionalString;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
 public class ProfileSettingRequest {
-	@NotBlank
+	@OptionalString
 	private String name;
-	@NotBlank
+	@OptionalString
 	private String category;
-	@NotBlank
+	@OptionalString
 	private String location;
-	@NotBlank
-	@Email
+	
+	@Email()
 	private String email;
+	
+	@AssertTrue(message = "At least one field must be provided")
+	private boolean isAtLeastOneFieldPresent() {
+		return name != null || category != null || location != null || email != null;
+	}
 }

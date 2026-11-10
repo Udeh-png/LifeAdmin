@@ -1,24 +1,26 @@
 package com.life_admin.backend.DTOs.request;
 
 import com.life_admin.backend.models.BusinessAccount;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
-import jakarta.annotation.Nullable;
-import jakarta.validation.constraints.Size;
+import com.life_admin.backend.utils.OptionalString;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class AddServicesRequest {
+	@OptionalString
 	private String serviceName;
+	
 	private Long serviceDuration;
 	private Long minService;
 	private Long maxService;
 	private BusinessAccount.WorkTime workTime;
+	
+	@AssertTrue(message = "At least one field must be provided")
+	private boolean isAtLeastOneFieldPresent() {
+		return serviceName != null || serviceDuration != null || minService != null || maxService != null;
+	}
 }

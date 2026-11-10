@@ -11,17 +11,13 @@ import com.life_admin.backend.repositories.BookingRepo;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
 import com.mongodb.MongoException;
-import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.*;
@@ -29,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.zip.DataFormatException;
 
 @Service
 public class BookingService {
@@ -47,9 +42,8 @@ public class BookingService {
 	
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
 		BusinessAccount businessAccount = businessRepo.findById(
-						createBookingRequest.getBusinessId())
-				.orElseThrow(BusinessNotFoundException::new
-				);
+				createBookingRequest.getBusinessId()
+		).orElseThrow(BusinessNotFoundException::new);
 		
 		BusinessAccount.Service service = businessAccount.getServices()
 				.stream()
@@ -59,21 +53,21 @@ public class BookingService {
 				.orElseThrow(ServiceNotFoundException::new);
 		
 		if (service.getSessionDuration() != null) {
-			if (createBookingRequest.getAppointmentDurationMins() != service.getSessionDuration().toMinutes())
+			if (createBookingRequest.getAppointmentDuration() != service.getSessionDuration().toMinutes())
 				throw new CannotBookException("This service is fixed at "
 						+ service.getSessionDuration().toMinutes() + " mins");
-		} else if (createBookingRequest.getAppointmentDurationMins() > service.getSessionMax().toMinutes() ||
-				createBookingRequest.getAppointmentDurationMins() < service.getSessionMin().toMinutes()) {
+		} else if (createBookingRequest.getAppointmentDuration() > service.getSessionMax().toMinutes() ||
+				createBookingRequest.getAppointmentDuration() < service.getSessionMin().toMinutes()) {
 			throw new CannotBookException("This service has a maximum duration of "
 					+ service.getSessionMax().toMinutes()
 					+ " mins and a minimum of "
 					+ service.getSessionMin());
 		}
 		
-		Duration requestedDuration = Duration.ofMinutes(createBookingRequest.getAppointmentDurationMins());
+		Duration requestedDuration = Duration.ofMinutes(createBookingRequest.getAppointmentDuration());
 		
-		Instant requestedStartTime = createBookingRequest.getAppointmentStartTime();
-		Instant requestedEndTime = requestedStartTime
+		LocalDateTime requestedStartTime = createBookingRequest.getAppointmentStartTime();
+		LocalDateTime requestedEndTime = requestedStartTime
 				.plusSeconds(
 						requestedDuration.toSeconds()
 				);
@@ -103,7 +97,7 @@ public class BookingService {
 	
 	private CreateBookingResponse createBookingTransactional(BusinessAccount.Service service, MyUserDetails userDetails,
 	                                                         BusinessAccount businessAccount, CreateBookingRequest createBookingRequest,
-	                                                         Instant requestedEndTime) {
+	                                                         LocalDateTime requestedEndTime) {
 		mongoTemplate.updateFirst(
 				Query.query(Criteria.where("_id").is(businessAccount.getId())),
 				new Update().inc("bookingSequence", 1),
@@ -112,8 +106,8 @@ public class BookingService {
 		
 		Query query = Query.query(
 				new Criteria().andOperator(
-						Criteria.where("businessId").is(createBookingRequest.getServiceId()),
-						Criteria.where("status").not().is(BookingStatus.CANCELLED),
+						Criteria.where("businessId").is(businessAccount.getId()),
+						Criteria.where("status").ne(BookingStatus.CANCELLED),
 						Criteria.where("appointmentEndTime").gt(createBookingRequest.getAppointmentStartTime()),
 						Criteria.where("appointmentStartTime").lt(requestedEndTime)
 				)
@@ -136,8 +130,8 @@ public class BookingService {
 				businessAccount.getName(),
 				service.getName(),
 				service.getId(),
-				createBookingRequest.getAppointmentStartTime(),
-				requestedEndTime,
+				createBookingRequest.getAppointmentStartTime().atZone(ZoneId.of("Africa/Lagos")).toInstant(),
+				requestedEndTime.atZone(ZoneId.of("Africa/Lagos")).toInstant(),
 				BookingStatus.CONFIRMED,
 				Instant.now()
 		));
@@ -153,26 +147,23 @@ public class BookingService {
 	}
 	
 	private void checkWithinOpeningHours(BusinessAccount business, BusinessAccount.Service service,
-	                                     Instant start, Instant end) {
-		if (start.isBefore(Instant.now()))
+	                                     LocalDateTime start, LocalDateTime end) {
+		if (start.isBefore(LocalDateTime.now()))
 			throw new InvalidTimeRangeException("Are you dumb?");
 		
-		BusinessAccount.WorkTime rule = service.getWorkTime() != null
+		BusinessAccount.WorkTime workTime = service.getWorkTime() != null
 				? service.getWorkTime()
 				: business.getWorkingTime();
 		
-		LocalDateTime s = start.atZone(business.getZoneId()).toLocalDateTime();
-		LocalDateTime e = end.atZone(business.getZoneId()).toLocalDateTime();
 		
-		BusinessAccount.DayHours day = rule.getDaysHoursMap().get(s.getDayOfWeek());
+		BusinessAccount.DayHours day = workTime.getDaysHoursMap().get(start.getDayOfWeek());
 		if (day == null)
-			throw new BusinessAlreadyClosedException();    // closed that day
+			throw new BusinessClosedException("Business does not open on this date");    // closed that day
 		
-		if (s.toLocalTime().isBefore(day.openTime()))
-			throw new NotYetOpenException();
-		
-		if (e.toLocalTime().isAfter(day.closeTime()))
-			throw new BusinessAlreadyClosedException();
+		if (end.toLocalTime().isAfter(day.closeTime()) || start.toLocalTime().isBefore(day.openTime()))
+			throw new BusinessClosedException(
+					day.openTime(), day.closeTime()
+			);
 	}
 	
 	private void pauseThreadAndRetry() {
@@ -204,8 +195,9 @@ public class BookingService {
 		if (!isBusiness && !isOwner)
 			throw new BookingNotFoundException();
 		
-		if (booking.getAppointmentStartTime().isBefore(Instant.now()))
+		if (booking.getAppointmentStartTime().isBefore(Instant.now())) {
 			throw new CannotCancelBookingException("Cannot cancel an appointment after it has started");
+		}
 		
 		mongoTemplate.updateFirst(
 				Query.query(Criteria.where("_id").is(booking.getId())
