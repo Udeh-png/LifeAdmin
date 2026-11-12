@@ -37,10 +37,14 @@ public class Booking {
 	private Instant appointmentEndTime;
 	@NonNull
 	private BookingStatus status;
-	@NonNull
-	private Instant createdAt;
 	
 	private UserInfo userInfo;
+	
+	@NonNull
+	private Instant createdAt;
+	@NonNull
+	private Instant updatedAt;
+	
 	
 	@Data
 	@AllArgsConstructor

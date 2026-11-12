@@ -11,6 +11,7 @@ import com.life_admin.backend.repositories.BookingRepo;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
 import com.mongodb.MongoException;
+import com.mongodb.client.result.UpdateResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -133,6 +134,7 @@ public class BookingService {
 				createBookingRequest.getAppointmentStartTime().atZone(ZoneId.of("Africa/Lagos")).toInstant(),
 				requestedEndTime.atZone(ZoneId.of("Africa/Lagos")).toInstant(),
 				BookingStatus.CONFIRMED,
+				Instant.now(),
 				Instant.now()
 		));
 		
@@ -202,7 +204,7 @@ public class BookingService {
 		mongoTemplate.updateFirst(
 				Query.query(Criteria.where("_id").is(booking.getId())
 						.and("status").is(BookingStatus.CONFIRMED)),
-				new Update().set("status", BookingStatus.CANCELLED),
+				new Update().set("status", BookingStatus.CANCELLED).set("updatedAt", Instant.now()),
 				Booking.class); // change status to cancelled
 	}
 	

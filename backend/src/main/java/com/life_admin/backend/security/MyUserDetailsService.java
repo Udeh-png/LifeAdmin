@@ -23,7 +23,7 @@ public class MyUserDetailsService implements UserDetailsService {
 	
 	@Override
 	@NullMarked
-	public UserDetails loadUserByUsername(String identifier) throws UsernameNotFoundException {
+	public MyUserDetails loadUserByUsername(String identifier) throws UsernameNotFoundException {
 		UserAccount userAccount;
 		BusinessAccount businessAccount;
 		

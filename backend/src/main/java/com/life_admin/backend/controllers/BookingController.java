@@ -26,7 +26,7 @@ public class BookingController {
 	private BookingService bookingService;
 	
 	@PostMapping("/create")
-	@PreAuthorize("hasRole('USER')")
+	@PreAuthorize("hasAuthority('USER')")
 	ResponseEntity<?> createBooking(@RequestBody CreateBookingRequest request, @AuthenticationPrincipal MyUserDetails userDetails) {
 		CreateBookingResponse createBookingResponse = bookingService.createBooking(request, userDetails);
 		

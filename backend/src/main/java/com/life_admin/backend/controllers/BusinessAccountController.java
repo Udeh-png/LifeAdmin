@@ -25,7 +25,7 @@ public class BusinessAccountController {
 	private BusinessAccountService businessAccountService;
 	
 	@PostMapping("/add-service")
-	@PreAuthorize("hasRole('BUSINESS')")
+	@PreAuthorize("hasAuthority('BUSINESS')")
 	ResponseEntity<?> addService(@RequestBody @Valid AddServicesRequest service, @AuthenticationPrincipal MyUserDetails userDetails) {
 		businessAccountService.addService(service, userDetails);
 		
