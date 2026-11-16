@@ -46,11 +46,4 @@ public class BusinessController {
 		
 		return ResponseEntity.ok().build();
 	}
-	
-	@GetMapping
-	ResponseEntity<?> listAll() {
-		List<BusinessResponse> businesses = businessService.getAllBusinesses();
-		
-		return ResponseEntity.ok(Map.of("businesses", businesses));
-	}
 }

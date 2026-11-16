@@ -20,5 +20,4 @@ public class CreateBookingRequest {
 	
 	@Positive
 	private Long appointmentDuration;
-	private ZoneId zoneId;
 }

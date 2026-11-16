@@ -11,7 +11,6 @@ import com.life_admin.backend.repositories.BookingRepo;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
 import com.mongodb.MongoException;
-import com.mongodb.client.result.UpdateResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -62,7 +61,7 @@ public class BookingService {
 			throw new CannotBookException("This service has a maximum duration of "
 					+ service.getSessionMax().toMinutes()
 					+ " mins and a minimum of "
-					+ service.getSessionMin());
+					+ service.getSessionMin().toMinutes());
 		}
 		
 		Duration requestedDuration = Duration.ofMinutes(createBookingRequest.getAppointmentDuration());
@@ -218,8 +217,8 @@ public class BookingService {
 	}
 	
 	public List<BookingResponse> getBookings(String serviceName, String username, String businessName,
-	                                         Instant createdAtStartTime, Instant createdAtEndTime, String createdAtOperator,
-	                                         String status, Instant startTime, String startTimeOperation, MyUserDetails userDetails) {
+	                                         LocalDateTime createdAtFrom, LocalDateTime createdAtTo, String status,
+	                                         LocalDateTime startTimeFrom, LocalDateTime startTimeTo, MyUserDetails userDetails) {
 		
 		List<Criteria> criteriaList = new ArrayList<>();
 		criteriaList.add(new Criteria().orOperator(
@@ -239,21 +238,12 @@ public class BookingService {
 		if (status != null)
 			criteriaList.add(Criteria.where("status").is(status));
 		
-		if (createdAtStartTime != null && createdAtEndTime == null) {
-			criteriaList.add(applyTimeOperator(createdAtOperator, "createdAt", createdAtStartTime));
-		}
+		timeRangeHelper(criteriaList, createdAtFrom, createdAtTo, "createdAt");
 		
-		if (createdAtEndTime != null && createdAtStartTime != null) {
-			if (!createdAtEndTime.isAfter(createdAtStartTime)) {
-				throw new InvalidTimeRangeException("Time range is invalid");
-			}
-			
-			criteriaList.add(Criteria.where("createdAt").gte(createdAtStartTime).lte(createdAtEndTime));
-			// is on or after start time but on or before endtime
-		}
-		if (startTime != null) {
-			criteriaList.add(applyTimeOperator(startTimeOperation, "appointmentStartTime", startTime));
-		}
+		timeRangeHelper(criteriaList, startTimeFrom, startTimeTo, "appointmentStartTime");
+		
+		if (criteriaList.isEmpty())
+			return bookingRepo.findAll().stream().map(BookingResponse::new).toList();
 		
 		Criteria criteria = new Criteria().andOperator(criteriaList);
 		Query query = Query.query(criteria);
@@ -261,19 +251,28 @@ public class BookingService {
 		return mongoTemplate.find(query, Booking.class).stream().map(BookingResponse::new).toList();
 	}
 	
-	private Criteria applyTimeOperator(String op, String field, Instant value) {
-		if (op == null)
-			throw new NoOperatorException();
+	private void timeRangeHelper (List<Criteria> criteria, LocalDateTime from, LocalDateTime to, String field) {
+		Instant start = toInstant(from);
+		Instant end = toInstant(to);
 		
-		return switch (op.toUpperCase()) {
-			case "EQ" -> Criteria.where(field).is(value);
-			case "GT" -> Criteria.where(field).gt(value); // after given date/time
-			case "LT" -> Criteria.where(field).lt(value); // before given date/time
-			case "GTE" -> Criteria.where(field).gte(value); // on or after given date/time
-			case "LTE" -> Criteria.where(field).lte(value); // on or before given date/time
+		if (start == null && end == null)
+			return;
+		
+		if (start != null && end != null && !end.isAfter(start))
+			throw new InvalidTimeRangeException("Time range is invalid");
 			
-			default -> throw new IllegalArgumentException("Unknown operator: " + op);
-		};
+		Criteria c = Criteria.where(field);
+		
+		if (start != null) c.gte(start);
+		if (end != null) c.lt(end);
+		
+		criteria.add(c);
+	}
+	
+	private static Instant toInstant (LocalDateTime dateTime) {
+		if (dateTime == null)
+			return null;
+		return dateTime.atZone(ZoneId.of("Africa/Lagos")).toInstant();
 	}
 }
 

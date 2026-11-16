@@ -16,6 +16,8 @@ public class BusinessResponse {
 	private String name;
 	private String email;
 	private String category;
+	private String location;
+	private BusinessAccount.WorkTime workTime;
 	private List<BusinessAccount.Service> services;
 	
 	public BusinessResponse (BusinessAccount b) {
@@ -23,6 +25,8 @@ public class BusinessResponse {
 		this.id = b.getId();
 		this.name = b.getName();
 		this.category = b.getCategory();
+		this.location = b.getLocation();
+		this.workTime = b.getWorkingTime();
 		this.services = b.getServices();
 	}
 }

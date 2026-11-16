@@ -35,7 +35,7 @@ public class BusinessService {
 		if (location != null)
 			criteriaList.add(Criteria.where("location").regex(location, "i"));
 		
-		if (services != null && !services.isEmpty())
+		if (services != null && !services.isEmpty()) {
 			if ("AND".equalsIgnoreCase(operator))
 				services.forEach((s) -> criteriaList.add(Criteria.where("services.name").regex(s, "i")));
 			else if ("OR".equalsIgnoreCase(operator)) {
@@ -44,7 +44,10 @@ public class BusinessService {
 				
 				criteriaList.add(new Criteria().orOperator(serviceList));
 			}
+		}
 		
+		if (criteriaList.isEmpty())
+			return businessRepo.findAll().stream().map(BusinessResponse::new).toList();
 		
 		Criteria criteria = new Criteria().andOperator(criteriaList);
 		return mongoTemplate.find(
@@ -56,11 +59,6 @@ public class BusinessService {
 				.map(BusinessResponse::new)
 				.toList();
 		
-	}
-	
-	public List<BusinessResponse> getAllBusinesses() {
-		return businessRepo.findAll()
-				.stream().map(BusinessResponse::new).toList();
 	}
 	
 	public BusinessResponse findWithId(String id) {
@@ -76,7 +74,6 @@ public class BusinessService {
 				.filter(s -> s.getId().equals(serviceId))
 				.findFirst()
 				.orElseThrow(ServiceNotFoundException::new);
-		
 		
 		
 		return null;

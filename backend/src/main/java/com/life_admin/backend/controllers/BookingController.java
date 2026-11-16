@@ -16,6 +16,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -57,12 +58,11 @@ public class BookingController {
 			@RequestParam(required = false) String serviceName,
 			@RequestParam(required = false) String username,
 			@RequestParam(required = false) String businessName,
-			@RequestParam(required = false) Instant createdAtStartTime,
-			@RequestParam(required = false) Instant createdAtEndTime,
-			@RequestParam(required = false) String createdAtOperator,
+			@RequestParam(required = false) LocalDateTime createdAtStartTime,
+			@RequestParam(required = false) LocalDateTime createdAtEndTime,
 			@RequestParam(required = false) String status,
-			@RequestParam(required = false) Instant startTime,
-			@RequestParam(required = false) String startTimeOperator,
+			@RequestParam(required = false) LocalDateTime startTimeFrom,
+			@RequestParam(required = false) LocalDateTime startTimeTo,
 			@AuthenticationPrincipal MyUserDetails userDetails
 	) {
 		List<BookingResponse> bookings = bookingService.getBookings(
@@ -71,10 +71,9 @@ public class BookingController {
 				businessName,
 				createdAtStartTime,
 				createdAtEndTime,
-				createdAtOperator,
 				status,
-				startTime,
-				startTimeOperator,
+				startTimeFrom,
+				startTimeTo,
 				userDetails
 		);
 		
