@@ -24,6 +24,8 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -40,7 +42,12 @@ public class BookingService {
 	@Autowired
 	private TransactionTemplate template;
 	
+	private final Set<String> bookingsInFlight = ConcurrentHashMap.newKeySet();
+	
 	public CreateBookingResponse createBooking(CreateBookingRequest createBookingRequest, MyUserDetails userDetails) {
+		if (bookingsInFlight.add(userDetails.getId()))
+			throw new RuntimeException();
+		
 		BusinessAccount businessAccount = businessRepo.findById(
 				createBookingRequest.getBusinessId()
 		).orElseThrow(BusinessNotFoundException::new);
@@ -72,7 +79,19 @@ public class BookingService {
 						requestedDuration.toSeconds()
 				);
 		
-		checkWithinOpeningHours(businessAccount, service, requestedStartTime, requestedEndTime);
+		Query query = new Query().addCriteria(
+				Criteria.where("userId")
+						.is(userDetails.getId())
+						.and("appointmentStartTime")
+						.lt(toInstant(requestedEndTime))
+						.and("appointmentEndTIme")
+						.gt(toInstant(requestedStartTime))
+		);
+		
+		if (mongoTemplate.exists(query, Booking.class))
+			throw new SlotNotAvailableException();
+			
+		checkWithinOpeningHours(businessAccount, service, requestedStartTime, requestedEndTime, userDetails.getZoneId());
 		
 		int attempts = 0;
 		int MAX_RETRY_ATTEMPTS = 3;
@@ -113,11 +132,7 @@ public class BookingService {
 				)
 		);
 		
-		Optional<Booking> bookingOpt = mongoTemplate.find(query, Booking.class)
-				.stream()
-				.findFirst();
-		
-		if (bookingOpt.isPresent())
+		if (mongoTemplate.exists(query, Booking.class))
 			throw new SlotNotAvailableException();
 		
 		if (businessAccount.getBookingApiUrl() != null) {
@@ -130,8 +145,8 @@ public class BookingService {
 				businessAccount.getName(),
 				service.getName(),
 				service.getId(),
-				createBookingRequest.getAppointmentStartTime().atZone(ZoneId.of("Africa/Lagos")).toInstant(),
-				requestedEndTime.atZone(ZoneId.of("Africa/Lagos")).toInstant(),
+				createBookingRequest.getAppointmentStartTime().atZone(userDetails.getZoneId()).toInstant(),
+				requestedEndTime.atZone(userDetails.getZoneId()).toInstant(),
 				BookingStatus.CONFIRMED,
 				Instant.now(),
 				Instant.now()
@@ -147,24 +162,32 @@ public class BookingService {
 		return new CreateBookingResponse(booking);
 	}
 	
-	private void checkWithinOpeningHours(BusinessAccount business, BusinessAccount.Service service,
-	                                     LocalDateTime start, LocalDateTime end) {
-		if (start.isBefore(LocalDateTime.now()))
-			throw new InvalidTimeRangeException("Are you dumb?");
+	public void checkWithinOpeningHours(BusinessAccount business, BusinessAccount.Service service,
+	                                     LocalDateTime start, LocalDateTime end, ZoneId userZoneId) {
+		if (!start.isBefore(end))
+			throw new InvalidTimeRangeException("Invalid time range bruh!");
 		
 		BusinessAccount.WorkTime workTime = service.getWorkTime() != null
 				? service.getWorkTime()
 				: business.getWorkingTime();
 		
+		Instant startInstant = start.atZone(userZoneId).toInstant();
+		Instant endInstant = end.atZone(userZoneId).toInstant();
 		
-		BusinessAccount.DayHours day = workTime.getDaysHoursMap().get(start.getDayOfWeek());
-		if (day == null)
-			throw new BusinessClosedException("Business does not open on this date");    // closed that day
+		if (startInstant.isBefore(Instant.now()))
+			throw new InvalidTimeRangeException("Are you dumb?");
 		
-		if (end.toLocalTime().isAfter(day.closeTime()) || start.toLocalTime().isBefore(day.openTime()))
-			throw new BusinessClosedException(
-					day.openTime(), day.closeTime()
-			);
+		LocalDate bizDate = startInstant.atZone(business.getZoneId()).toLocalDate();
+		BusinessAccount.DayHours dayHours = workTime.getDaysHoursMap().get(bizDate.getDayOfWeek());
+		
+		if (dayHours == null)
+			throw new BusinessClosedException("Business is closed on " + bizDate.getDayOfWeek());
+		
+		Instant bizOpenInstant = bizDate.atTime(dayHours.openTime()).atZone(business.getZoneId()).toInstant();
+		Instant bizCloseInstant = bizDate.atTime(dayHours.closeTime()).atZone(business.getZoneId()).toInstant();
+		
+		if (startInstant.isBefore(bizOpenInstant) || endInstant.isAfter(bizCloseInstant))
+			throw new BusinessClosedException(bizOpenInstant.atZone(userZoneId).toLocalTime(), bizCloseInstant.atZone(userZoneId).toLocalTime());
 	}
 	
 	private void pauseThreadAndRetry() {

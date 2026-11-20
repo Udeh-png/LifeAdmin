@@ -9,6 +9,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 
@@ -25,6 +26,8 @@ public class MyUserDetails implements UserDetails {
 	private final String id;
 	@Getter
 	private final String phoneNumber;
+	@Getter
+	private final ZoneId zoneId;
 	
 	public MyUserDetails(UserAccount user) {
 		this.id = user.getId();
@@ -32,6 +35,7 @@ public class MyUserDetails implements UserDetails {
 		this.email = user.getEmail();
 		this.password = user.getPassword();
 		this.phoneNumber = user.getPhoneNumber();
+		this.zoneId = user.getZoneId();
 		this.authorities = List.of(new SimpleGrantedAuthority("USER"));
 	}
 	
@@ -40,6 +44,7 @@ public class MyUserDetails implements UserDetails {
 		this.username = business.getName();
 		this.email = business.getEmail();
 		this.password = business.getPassword();
+		this.zoneId = business.getZoneId();
 		this.authorities = List.of(new SimpleGrantedAuthority("BUSINESS"));
 		phoneNumber = null;
 	}
