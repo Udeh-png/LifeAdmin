@@ -3,8 +3,10 @@ package com.life_admin.backend.mcp_tools;
 import com.life_admin.backend.DTOs.request.CreateBookingRequest;
 import com.life_admin.backend.DTOs.response.BookingResponse;
 import com.life_admin.backend.DTOs.response.CreateBookingResponse;
+import com.life_admin.backend.DTOs.response.PrepareBookingResponse;
 import com.life_admin.backend.security.MyUserDetails;
 import com.life_admin.backend.services.BookingService;
+import com.life_admin.backend.utils.ResolvedBookingRequest;
 import jakarta.validation.constraints.Positive;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
@@ -26,10 +28,10 @@ public class BookingTools {
 	@Autowired
 	BookingService bookingService;
 	
-	@McpTool(name = "create_booking",
+	@McpTool(name = "prepare_booking",
 			description = "Book a service at a business. Only call this after the user has explicitly " +
 					"confirmed the business, service and time. Use ids from search_businesses.")
-	public CreateBookingResponse createBooking(
+	public PrepareBookingResponse prepareBooking(
 			@McpToolParam(description = "Business id from search_businesses") String businessId,
 			@McpToolParam(description = "Service id from search_businesses") String serviceId,
 			@McpToolParam(description = "Start time, ISO-8601 without an offset, e.g. 2026-11-20T09:00")
@@ -39,13 +41,27 @@ public class BookingTools {
 		MyUserDetails user = (MyUserDetails) Objects.requireNonNull(SecurityContextHolder.getContext()
 				.getAuthentication()).getPrincipal();
 		
-		CreateBookingRequest req = new CreateBookingRequest();
-		req.setBusinessId(businessId);
-		req.setServiceId(serviceId);
-		req.setAppointmentStartTime(startTime);
-		req.setAppointmentDuration(minutes);
+		if (user == null) return null;
 		
-		return bookingService.createBooking(req, user);
+		return bookingService.prepareBooking(businessId, serviceId, minutes, startTime, user);
+	}
+	
+	
+	@McpTool(name = "confirm_booking",
+			description = "Book the slot from a prepare_booking result. Call this only after the user has said yes " +
+					"to that exact summary. Use the pendingId from the most recent prepare_booking result, " +
+					"unchanged. If it says the request expired or was already used, call prepare_booking again. " +
+					"Never make up a pendingId.")
+	public CreateBookingResponse confirmBooking(
+			@McpToolParam(description = "pendingId from the most recent prepare_booking result. Copy it exactly.")
+			String pendingId) {
+		
+		MyUserDetails user = (MyUserDetails) Objects.requireNonNull(SecurityContextHolder.getContext()
+				.getAuthentication()).getPrincipal();
+		
+		if (user == null) return null;
+		
+		return bookingService.confirmBooking(pendingId, user);
 	}
 	
 	@McpTool(name = "my_bookings",
@@ -54,32 +70,24 @@ public class BookingTools {
 	public List<BookingResponse> myBookings(
 			@McpToolParam(description = "Part of the service name, e.g. 'vaccination'. Case-insensitive. Leave empty to ignore.",
 					required = false) String serviceName,
-			
 			@McpToolParam(description = "Part of the user name, e.g. 'vaccination'. Case-insensitive. Leave empty to ignore.",
 					required = false) String userName,
-			
 			@McpToolParam(description = "Part of the business name, e.g. 'Lagos Medical'. Case-insensitive. Leave empty to ignore.",
 					required = false) String businessName,
-			
 			@McpToolParam(description = "Booking status: CONFIRMED, CANCELLED or PENDING. Leave empty for all statuses.",
 					required = false) String status,
-			
 			@McpToolParam(description = "Only bookings created at or after this time. Nigerian time, ISO-8601 without an offset, " +
 					"e.g. 2026-11-01T00:00. Leave empty for no lower limit.", required = false) LocalDateTime createdFrom,
-			
 			@McpToolParam(description = "Only bookings created before this time. Nigerian time, ISO-8601 without an offset, " +
 					"e.g. 2026-12-01T00:00. Leave empty for no upper limit.", required = false) LocalDateTime createdTo,
-			
 			@McpToolParam(description = "Only bookings starting at or after this time. Nigerian time, ISO-8601 without an offset, " +
 					"e.g. 2026-11-20T09:00. Leave empty for no lower limit.", required = false) LocalDateTime startFrom,
-			
 			@McpToolParam(description = "Only bookings starting before this time. Nigerian time, ISO-8601 without an offset, " +
 					"e.g. 2026-11-21T00:00. Leave empty for no upper limit.", required = false) LocalDateTime startTo) {
-		
 		MyUserDetails user = (MyUserDetails) Objects.requireNonNull(SecurityContextHolder.getContext()
 				.getAuthentication()).getPrincipal();
 		
-		assert user != null;
+		if (user == null) return null;
 		return bookingService.getBookings(serviceName, userName, businessName,
 				createdFrom, createdTo, status,
 				startFrom, startTo, user);
@@ -95,7 +103,7 @@ public class BookingTools {
 		MyUserDetails user = (MyUserDetails) Objects.requireNonNull(SecurityContextHolder.getContext()
 				.getAuthentication()).getPrincipal();
 		
-		assert user != null;
+		if (user == null) return;
 		bookingService.cancelBooking(bookingId, user);
 	}
 }

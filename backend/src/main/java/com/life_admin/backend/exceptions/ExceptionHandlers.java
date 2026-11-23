@@ -77,8 +77,8 @@ public class ExceptionHandlers {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
 	}
 	
-	@ExceptionHandler(SlotNotAvailableException.class)
-	public ResponseEntity<?> slotNotAvailableExceptionHandler (SlotNotAvailableException e) {
+	@ExceptionHandler(ScheduleConflict.class)
+	public ResponseEntity<?> slotNotAvailableExceptionHandler (ScheduleConflict e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
 	}
 	

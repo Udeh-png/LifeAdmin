@@ -6,21 +6,24 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class CreateBookingResponse {
 	private String bookingId;
 	private String businessName;
 	private String serviceName;
-	private Instant appointmentStartTime;
-	private Instant appointmentEndTime;
+	private String appointmentStartTime; // startTime in business time zone
+	private String appointmentEndTime; // endTime in business time zone
 	
-	public CreateBookingResponse(Booking b) {
+	public CreateBookingResponse(Booking b, ZoneId businessZoneId) {
 		this.bookingId = b.getId();
 		this.businessName = b.getBusinessName();
 		this.serviceName = b.getServiceName();
-		this.appointmentStartTime = b.getAppointmentStartTime();
-		this.appointmentEndTime = b.getAppointmentEndTime();
+		this.appointmentStartTime = b.getAppointmentStartTime().atZone(businessZoneId).toOffsetDateTime().toString();
+		this.appointmentEndTime = b.getAppointmentEndTime().atZone(businessZoneId).toOffsetDateTime().toString();
 	}
 }

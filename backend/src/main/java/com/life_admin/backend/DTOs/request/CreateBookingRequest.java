@@ -5,8 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -17,6 +15,8 @@ public class CreateBookingRequest {
 	private String businessId;
 	private String serviceId;
 	private LocalDateTime appointmentStartTime;
+	
+	private ZoneId userZoneId;
 	
 	@Positive
 	private Long appointmentDuration;
