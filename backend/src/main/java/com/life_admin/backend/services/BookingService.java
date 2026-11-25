@@ -11,6 +11,8 @@ import com.life_admin.backend.models.BusinessAccount;
 import com.life_admin.backend.repositories.BookingRepo;
 import com.life_admin.backend.repositories.BusinessAccountRepo;
 import com.life_admin.backend.security.MyUserDetails;
+import com.life_admin.backend.services.redis_services.BookingInFlightRedisService;
+import com.life_admin.backend.services.redis_services.PendingBookingRedisService;
 import com.life_admin.backend.utils.ResolvedBookingRequest;
 import com.mongodb.MongoException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,28 +40,22 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BookingService {
 	@Autowired
 	private BookingRepo bookingRepo;
-	
 	@Autowired
 	private BusinessAccountRepo businessRepo;
-	
 	@Autowired
 	private MongoTemplate mongoTemplate;
-	
 	@Autowired
 	private TransactionTemplate template;
-	
 	@Autowired
 	private RedisTemplate<String, Object> redisTemplate;
+	@Autowired
+	private PendingBookingRedisService pendingBookingRedisService;
+	@Autowired
+	private BookingInFlightRedisService bookingInFlightRedisService;
 	
 	public ResolvedBookingRequest resolveBookingRequest(String businessId, String serviceId,
 	                                                    Long duration, LocalDateTime requestedStartTime,
 	                                                    String userId, ZoneId userZoneId) {
-		boolean hasBookingInFLight = !redisTemplate.opsForValue().setIfAbsent("booking:in:flight:" + userId, 1, Duration.ofSeconds(30));
-		
-		if (hasBookingInFLight)
-			throw new RuntimeException();
-		// to prevent one user sending another booking request while one is in progress
-		
 		BusinessAccount businessAccount = businessRepo.findById(
 				businessId
 		).orElseThrow(BusinessNotFoundException::new);
@@ -94,9 +90,9 @@ public class BookingService {
 				Criteria.where("userId")
 						.is(userId)
 						.and("appointmentStartTime")
-						.lt(toInstant(requestedEndTime))
+						.lt(toInstant(requestedEndTime, userZoneId))
 						.and("appointmentEndTIme")
-						.gt(toInstant(requestedStartTime))
+						.gt(toInstant(requestedStartTime, userZoneId))
 		);
 		
 		if (mongoTemplate.exists(query, Booking.class))
@@ -107,14 +103,17 @@ public class BookingService {
 		return new ResolvedBookingRequest(businessAccount, service, requestedEndTime);
 	}
 	
-	public CreateBookingResponse createBooking(CreateBookingRequest request, MyUserDetails userDetails) {
+	public CreateBookingResponse createBooking(CreateBookingRequest request, MyUserDetails user) {
+		bookingInFlightRedisService.acquire(user.getId());
+		// to prevent one user sending another booking request while one is in progress
+		
 		ResolvedBookingRequest resolvedRequest = resolveBookingRequest(
 				request.getBusinessId(),
 				request.getServiceId(),
 				request.getAppointmentDuration(),
 				request.getAppointmentStartTime(),
-				userDetails.getId(),
-				userDetails.getZoneId()
+				user.getId(),
+				user.getZoneId()
 		);
 		
 		int attempts = 0;
@@ -126,7 +125,7 @@ public class BookingService {
 				return template.execute(status ->
 						createBookingTransactional(
 								resolvedRequest.getService(),
-								userDetails,
+								user,
 								resolvedRequest.getBusiness(),
 								request.getAppointmentStartTime(),
 								resolvedRequest.getRequestedEndTime()
@@ -141,15 +140,16 @@ public class BookingService {
 				
 				pauseThreadAndRetry();
 			} finally {
-				redisTemplate.delete("booking:in:flight:" + userDetails.getId());
+				bookingInFlightRedisService.release(user.getId());
 			}
 		}
-		
-		
 	}
 	
 	public CreateBookingResponse confirmBooking(String pendingId, MyUserDetails user) {
-		CreateBookingRequest request = (CreateBookingRequest) redisTemplate.opsForValue().get("pending:booking:request:" + pendingId + ":" + user.getId());
+		bookingInFlightRedisService.acquire(user.getId());
+		// to prevent one user sending another booking request while one is in progress
+		
+		CreateBookingRequest request = pendingBookingRedisService.claim(user.getId(), pendingId);
 		
 		assert request != null;
 		
@@ -185,19 +185,8 @@ public class BookingService {
 					throw new CannotBookException("");
 				
 				pauseThreadAndRetry();
-			}finally {
-				redisTemplate.executePipelined(new SessionCallback<>() {
-					
-					@SuppressWarnings({"unchecked", "NullableProblems"})
-					@Override
-					public Object execute(RedisOperations operations) throws DataAccessException {
-						
-						operations.delete("booking:in:flight:" + user.getId());
-						operations.delete("pending:booking:request:" + pendingId + ":" + user.getId());
-						
-						return null;
-					}
-				});
+			} finally {
+				bookingInFlightRedisService.release(user.getId());
 			}
 		}
 	}
@@ -218,8 +207,8 @@ public class BookingService {
 				new Criteria().andOperator(
 						Criteria.where("businessId").is(businessId),
 						Criteria.where("status").ne(BookingStatus.CANCELLED),
-						Criteria.where("appointmentEndTime").gt(requestedStartTime),
-						Criteria.where("appointmentStartTime").lt(resolvedRequest.getRequestedEndTime())
+						Criteria.where("appointmentEndTime").gt(toInstant(requestedStartTime, user.getZoneId())),
+						Criteria.where("appointmentStartTime").lt(toInstant(resolvedRequest.getRequestedEndTime(), user.getZoneId()))
 				)
 		);
 		
@@ -231,18 +220,13 @@ public class BookingService {
 		ZoneId businessZone = business.getZoneId();
 		LocalDateTime requestedEndTime = resolvedRequest.getRequestedEndTime();
 		
-		String pendingId = UUID.randomUUID().toString();
-		
-		redisTemplate.opsForValue()
-				.set("pending:booking:request:" + pendingId + ":" + user.getId(), new CreateBookingRequest(
-						businessId,
-						serviceId,
-						requestedStartTime,
-						user.getZoneId(),
-						duration
-				));
-		
-		redisTemplate.delete("booking:in:flight:" + user.getId());
+		String pendingId = pendingBookingRedisService.save(new CreateBookingRequest(
+				businessId,
+				serviceId,
+				requestedStartTime,
+				user.getZoneId(),
+				duration
+		), user.getId());
 		
 		return new PrepareBookingResponse(
 				pendingId,
@@ -257,7 +241,7 @@ public class BookingService {
 		);
 	}
 	
-	private CreateBookingResponse createBookingTransactional(BusinessAccount.Service service, MyUserDetails userDetails,
+	private CreateBookingResponse createBookingTransactional(BusinessAccount.Service service, MyUserDetails user,
 	                                                         BusinessAccount businessAccount, LocalDateTime requestedStartTime,
 	                                                         LocalDateTime requestedEndTime) {
 		mongoTemplate.updateFirst(
@@ -270,8 +254,8 @@ public class BookingService {
 				new Criteria().andOperator(
 						Criteria.where("businessId").is(businessAccount.getId()),
 						Criteria.where("status").ne(BookingStatus.CANCELLED),
-						Criteria.where("appointmentEndTime").gt(requestedStartTime),
-						Criteria.where("appointmentStartTime").lt(requestedEndTime)
+						Criteria.where("appointmentEndTime").gt(toInstant(requestedStartTime, user.getZoneId())),
+						Criteria.where("appointmentStartTime").lt(toInstant(requestedEndTime, user.getZoneId()))
 				)
 		);
 		
@@ -283,22 +267,22 @@ public class BookingService {
 		}
 		
 		Booking booking = (new Booking(
-				userDetails.getId(),
+				user.getId(),
 				businessAccount.getId(),
 				businessAccount.getName(),
 				service.getName(),
 				service.getId(),
-				requestedStartTime.atZone(userDetails.getZoneId()).toInstant(),
-				requestedEndTime.atZone(userDetails.getZoneId()).toInstant(),
+				requestedStartTime.atZone(user.getZoneId()).toInstant(),
+				requestedEndTime.atZone(user.getZoneId()).toInstant(),
 				BookingStatus.CONFIRMED,
 				Instant.now(),
 				Instant.now()
 		));
 		
 		booking.setUserInfo(new Booking.UserInfo(
-				userDetails.getUsername(),
-				userDetails.getPhoneNumber(),
-				userDetails.getEmail()
+				user.getUsername(),
+				user.getPhoneNumber(),
+				user.getEmail()
 		));
 		bookingRepo.save(booking);
 		
@@ -354,10 +338,10 @@ public class BookingService {
 		return false;
 	}
 	
-	public void cancelBooking(String id, MyUserDetails userDetails) {
+	public void cancelBooking(String id, MyUserDetails user) {
 		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
-		boolean isOwner = userDetails.getId().equals(booking.getUserId());
-		boolean isBusiness = userDetails.getId().equals(booking.getBusinessId());
+		boolean isOwner = user.getId().equals(booking.getUserId());
+		boolean isBusiness = user.getId().equals(booking.getBusinessId());
 		
 		if (!isBusiness && !isOwner)
 			throw new BookingNotFoundException();
@@ -373,10 +357,10 @@ public class BookingService {
 				Booking.class); // change status to cancelled
 	}
 	
-	public BookingResponse getBooking(String id, MyUserDetails userDetails) {
+	public BookingResponse getBooking(String id, MyUserDetails user) {
 		Booking booking = bookingRepo.findById(id).orElseThrow(BookingNotFoundException::new);
 		
-		if (!userDetails.getId().equals(booking.getBusinessId()) && !userDetails.getId().equals(booking.getUserId()))
+		if (!user.getId().equals(booking.getBusinessId()) && !user.getId().equals(booking.getUserId()))
 			throw new BookingNotFoundException();
 		
 		return new BookingResponse(booking);
@@ -384,12 +368,12 @@ public class BookingService {
 	
 	public List<BookingResponse> getBookings(String serviceName, String username, String businessName,
 	                                         LocalDateTime createdAtFrom, LocalDateTime createdAtTo, String status,
-	                                         LocalDateTime startTimeFrom, LocalDateTime startTimeTo, MyUserDetails userDetails) {
+	                                         LocalDateTime startTimeFrom, LocalDateTime startTimeTo, MyUserDetails user) {
 		
 		List<Criteria> criteriaList = new ArrayList<>();
 		criteriaList.add(new Criteria().orOperator(
-				Criteria.where("userId").is(userDetails.getId()),
-				Criteria.where("businessId").is(userDetails.getId())
+				Criteria.where("userId").is(user.getId()),
+				Criteria.where("businessId").is(user.getId())
 		));
 		
 		if (serviceName != null)
@@ -404,9 +388,9 @@ public class BookingService {
 		if (status != null)
 			criteriaList.add(Criteria.where("status").is(status));
 		
-		timeRangeHelper(criteriaList, createdAtFrom, createdAtTo, "createdAt");
+		timeRangeHelper(criteriaList, toInstant(createdAtFrom, user.getZoneId()), toInstant(createdAtTo, user.getZoneId()), "createdAt");
 		
-		timeRangeHelper(criteriaList, startTimeFrom, startTimeTo, "appointmentStartTime");
+		timeRangeHelper(criteriaList, toInstant(startTimeFrom, user.getZoneId()), toInstant(startTimeTo, user.getZoneId()), "appointmentStartTime");
 		
 		if (criteriaList.isEmpty())
 			return bookingRepo.findAll().stream().map(BookingResponse::new).toList();
@@ -417,27 +401,32 @@ public class BookingService {
 		return mongoTemplate.find(query, Booking.class).stream().map(BookingResponse::new).toList();
 	}
 	
-	private void timeRangeHelper(List<Criteria> criteria, LocalDateTime from, LocalDateTime to, String field) {
-		Instant start = toInstant(from);
-		Instant end = toInstant(to);
-		
-		if (start == null && end == null)
+	private void timeRangeHelper(List<Criteria> criteria, Instant from, Instant to, String field) {
+		if (from == null && to == null)
 			return;
 		
-		if (start != null && end != null && !end.isAfter(start))
+		if (from != null && to != null && !to.isAfter(from))
 			throw new InvalidTimeRangeException("Time range is invalid");
 		
 		Criteria c = Criteria.where(field);
 		
-		if (start != null) c.gte(start);
-		if (end != null) c.lt(end);
+		if (from != null) c.gte(from);
+		if (to != null) c.lt(to);
 		
 		criteria.add(c);
 	}
 	
-	private static Instant toInstant(LocalDateTime dateTime) {
+	private static Instant toInstant(LocalDateTime dateTime, ZoneId zoneId) {
 		if (dateTime == null)
 			return null;
-		return dateTime.atZone(ZoneId.of("Africa/Lagos")).toInstant();
+		return dateTime.atZone(zoneId).toInstant();
 	}
 }
+/*
+{
+  "businessId": "6aeb6095550204a005855d02",
+  "serviceId": "svc-gym1-pt",
+  "startTime": "2026-11-26T09:00",
+  "minutes": 45
+}
+*/
