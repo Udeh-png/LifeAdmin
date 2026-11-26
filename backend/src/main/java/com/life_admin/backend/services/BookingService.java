@@ -29,12 +29,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 public class BookingService {
@@ -363,7 +361,9 @@ public class BookingService {
 		if (!user.getId().equals(booking.getBusinessId()) && !user.getId().equals(booking.getUserId()))
 			throw new BookingNotFoundException();
 		
-		return new BookingResponse(booking);
+		BusinessAccount business = businessRepo.findById(booking.getBusinessId()).orElseThrow(BusinessNotFoundException::new);
+		
+		return new BookingResponse(booking, business.getZoneId());
 	}
 	
 	public List<BookingResponse> getBookings(String serviceName, String username, String businessName,
@@ -392,13 +392,32 @@ public class BookingService {
 		
 		timeRangeHelper(criteriaList, toInstant(startTimeFrom, user.getZoneId()), toInstant(startTimeTo, user.getZoneId()), "appointmentStartTime");
 		
-		if (criteriaList.isEmpty())
-			return bookingRepo.findAll().stream().map(BookingResponse::new).toList();
+		if (criteriaList.isEmpty()) {
+			List<Booking> bookings = bookingRepo.findAll();
+			
+			return bookingsToBookingResponses(bookings);
+		}
 		
 		Criteria criteria = new Criteria().andOperator(criteriaList);
 		Query query = Query.query(criteria);
 		
-		return mongoTemplate.find(query, Booking.class).stream().map(BookingResponse::new).toList();
+		List<Booking> bookings = mongoTemplate.find(query, Booking.class);
+		
+		return bookingsToBookingResponses(bookings);
+	}
+	
+	private List<BookingResponse> bookingsToBookingResponses (List<Booking> bookings) {
+		Set<String> ids = bookings.stream().map(Booking::getBusinessId).collect(Collectors.toSet());
+		
+		Map<String, ZoneId> zoneIdMap = businessRepo.findAllById(ids).stream().collect(Collectors.toMap(BusinessAccount::getId, BusinessAccount::getZoneId));
+		
+		List<BookingResponse> bookingResponses = new ArrayList<>();
+		
+		for (Booking b : bookings) {
+			bookingResponses.add(new BookingResponse(b, zoneIdMap.get(b.getBusinessId())));
+		}
+		
+		return bookingResponses;
 	}
 	
 	private void timeRangeHelper(List<Criteria> criteria, Instant from, Instant to, String field) {
